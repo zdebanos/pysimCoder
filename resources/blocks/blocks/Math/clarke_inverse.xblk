@@ -6,6 +6,6 @@
   "stin": 0,
   "stout": 0,
   "icon": "INVERSE_CLARKE",
-  "params": "clarke_inverseBlk",
-  "help": "This block performs inverse Clarke transformation.\n"
+  "params": "clarke_inverseBlk|Output type:0|Offset: 0.5",
+  "help": "This block performs inverse Clarke transformation.\nOutput type parameters determines the output waveform (the offset is used if and only if the Output type is 1):\n 0: symmetric around zero\n 1: "
 }

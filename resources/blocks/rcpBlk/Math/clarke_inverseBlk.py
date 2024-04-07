@@ -17,6 +17,6 @@ def clarke_inverseBlk(pin, pout):
 
     """
 
-    blk = RCPblk('inverse_clarke', pin, pout, [0,0], 1, [], [])
+    blk = RCPblk('inverse_clarke', pin, pout, [0,0], 1, [0], [])
     return blk
 
