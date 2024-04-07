@@ -76,6 +76,30 @@ void forward_clarke(int Flag, python_block *block)
     }
 }
 
+void inverse_clarke_offset(double *in1, double *in2, double *in3, double off)
+{
+  *in1 -= off;
+  *in2 -= off;
+  *in3 -= off;
+}
+
+void inverse_clarke_min(double *in1, double *in2, double *in3)
+{
+  double min;
+  if (*in1 < *in2) {
+    min = *in1;
+  } else {
+    min = *in2;
+  }
+  if (min > *in3) {
+    min = *in3;
+  }
+  *in1 -= min;
+  *in2 -= min;
+  *in3 -= min;
+}
+
+
 /****************************************************************************
  * Name: inverse_clarke
  *
@@ -92,14 +116,31 @@ void inverse_clarke(int Flag, python_block *block)
   double *alpha = block->u[0];
   double *beta = block->u[1];
 
+  /* output_type == 0: substract offset
+   * output_type == 1: find min(in1,in2,in3) and substract from in1, in2, in3
+   */
+
+  int output_type = block->realPar[0];
+  double offset   = block->realPar[0];
+
   switch(Flag)
     {
-      case CG_OUT:
       case CG_INIT:
+      case CG_OUT:
       case CG_END:
-        cur1[0] = alpha[0];
-        cur2[0] = -0.5f * alpha[0] + 0.5f * sqrt(3) * beta[0]; 
-        cur3[0] = -0.5f * alpha[0] - 0.5f * sqrt(3) * beta[0]; 
+        {
+          cur1[0] = alpha[0];
+          cur2[0] = -0.5f * alpha[0] + 0.5f * sqrt(3) * beta[0];
+          cur3[0] = -0.5f * alpha[0] - 0.5f * sqrt(3) * beta[0];
+          switch (output_type)
+            {
+              case 0:
+                inverse_clarke_offset(cur1, cur2, cur3, offset);
+                break;
+              case 1:
+                inverse_clarke_min(cur1, cur2, cur3);
+            }
+        }
         break;
       default:
         break;
