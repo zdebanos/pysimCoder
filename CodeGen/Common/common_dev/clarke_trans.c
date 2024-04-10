@@ -19,6 +19,11 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA.
 #include <pyblock.h>
 #include <math.h>
 
+static inline void inverse_clarke_min(double *in1, double *in2, double *in3);
+static inline void inverse_clarke_offset(double *in1, double *in2, double *in3,
+		                         double off);
+
+
 /****************************************************************************
  * Name: forward_clarke
  *
@@ -76,14 +81,15 @@ void forward_clarke(int Flag, python_block *block)
     }
 }
 
-void inverse_clarke_offset(double *in1, double *in2, double *in3, double off)
+static inline void inverse_clarke_offset(double *in1, double *in2, double *in3,
+		                         double off)
 {
   *in1 -= off;
   *in2 -= off;
   *in3 -= off;
 }
 
-void inverse_clarke_min(double *in1, double *in2, double *in3)
+static inline void inverse_clarke_min(double *in1, double *in2, double *in3)
 {
   double min;
   if (*in1 < *in2) {
