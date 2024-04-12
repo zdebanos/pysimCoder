@@ -1,7 +1,7 @@
 from supsisim.RCPblk import RCPblk
 from numpy import size
 
-def clarke_inverseBlk(pin, pout):
+def clarke_inverseBlk(pin, pout, output_type):
     """
 
     Call:   clarke_inverseBlk(pin, pout)
@@ -17,6 +17,6 @@ def clarke_inverseBlk(pin, pout):
 
     """
 
-    blk = RCPblk('inverse_clarke', pin, pout, [0,0], 1, [], [])
+    blk = RCPblk('inverse_clarke', pin, pout, [0,0], 1, [], [output_type])
     return blk
 
