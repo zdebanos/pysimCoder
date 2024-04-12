@@ -145,6 +145,9 @@ void inverse_clarke(int Flag, python_block *block)
                 break;
               case 1:
                 inverse_clarke_min(cur1, cur2, cur3);
+                break;
+              default:
+                break;
             }
         }
         break;
