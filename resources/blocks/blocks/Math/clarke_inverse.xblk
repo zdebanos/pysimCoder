@@ -6,6 +6,6 @@
   "stin": 0,
   "stout": 0,
   "icon": "INVERSE_CLARKE",
-  "params": "clarke_inverseBlk|Offset: 0.0:double|Output type: 0:int",
-  "help": "This block performs the inverse Clarke transformation.\n The \"Output type\" parameters determines the output waveform (the offset is used if and only if the Output type is 0):\n 0: relative to offset\n 1: substract min(in1, in2, in3) from in1, in2 and in3"
+  "params": "clarke_inverseBlk|Substract minimum: 0:int",
+  "help": "This block performs the inverse Clarke transformation.\n Substract min(u1, u2, u3) from u1, u2, u3: 0 - no, otherwise - yes"
 }
