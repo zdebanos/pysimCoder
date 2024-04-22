@@ -1,9 +1,13 @@
 from supsisim.qtvers import *
-
+from typing import Union
+import tempfile
+import os
+import svgutils
 from supsisim.port import Port, InPort, OutPort
 from supsisim.connection import Connection
 from supsisim.const import GRID, PW, LW, BWmin, BHmin, PD, respath
 from PyQt5 import QtSvg
+from PyQt5.QtCore import QByteArray
 
 class Block(QGraphicsPathItem):
     """A block holds ports that can be connected to."""
@@ -52,11 +56,42 @@ class Block(QGraphicsPathItem):
         txt += 'Icon         :' + self.icon.__str__() + '\n'
         txt += 'Params       :' + self.params.__str__() + '\n'
         return txt
+
+    def _createTmpSvg(self):
+        self._tmpSvgFile, self._tmpSvgFilename = tempfile.mkstemp()
+
+    def setSvgIcon(self, svgXmlTree: bytes):
+        os.truncate(self._tmpSvgFilename, 0)
+        os.write(self._tmpSvgFile, svgXmlTree)
+        byteArray = QByteArray(svgXmlTree)
+        self.svgRenderer = QtSvg.QSvgRenderer(byteArray)
+        self.svgFlip = False
+
+    def setSvgIconFlip(self):
+        # read the file first
+        svgTransform = svgutils.transform.fromfile(self._tmpSvgFilename)
+        svgCompose = svgutils.compose.SVG(self._tmpSvgFilename)
+        svgCompose.scale(-1, 1)
+        svgCompose.move(svgTransform.width, 0)
+        svgFigure = svgutils.compose.Figure(svgTransform.width, svgTransform.height, svgCompose)
+        svgFigure.save(self._tmpSvgFilename)
+        byteArray = QByteArray(bytes(svgFigure.tostr()))
+        self.svgRenderer = QtSvg.QSvgRenderer(byteArray)
+
         
     def setup(self):
         Nports = max(self.inp, self.outp)
         self.w = self.width
         self.h = BHmin+PD*(max(Nports-1,0))
+
+        # default to the basic icon
+        self.svgIconPath = respath + 'blocks/Icons/' + self.icon + '.svg'
+        self._createTmpSvg()
+
+        # open the file at svgIconPath
+        with open(self.svgIconPath, 'rb') as baseIcon:
+            contents = baseIcon.read()
+            self.setSvgIcon(contents)
 
         p = QPainterPath()
         self.setLabel(p)
@@ -110,18 +145,21 @@ class Block(QGraphicsPathItem):
         else:
             painter.drawPath(self.path())
             
-        # the path
-        str_path = respath + 'blocks/Icons/' + self.icon + '.svg'
-        # construct the renderer and get the size of the svg
-        renderer = QtSvg.QSvgRenderer(str_path)
-        svg_size = renderer.defaultSize()
 
-        # the middle of the boundingRect is actually (0,0)
-        # so shift only by the svg's width and height
+        if self.flip != self.svgFlip:
+            self.setSvgIconFlip()
+            self.svgFlip = self.flip
+        
+        # the path
+        ## construct the renderer and get the size of the svg
+        svg_size = self.svgRenderer.defaultSize()
+
+        ## the middle of the boundingRect is actually (0,0)
+        ## so shift only by the svg's width and height
         new_left: float = -svg_size.width()/2
         new_top: float = -svg_size.height()/2
         where_to: QRectF = QRectF(new_left, new_top, svg_size.width(), svg_size.height())
-        renderer.render(painter, where_to)
+        self.svgRenderer.render(painter, where_to)
 
     def itemChange(self, change, value):
         return value
@@ -134,6 +172,8 @@ class Block(QGraphicsPathItem):
             except:
                 pass
         self.scene.removeItem(self)
+        os.close(self._tmpSvgFile)
+        os.remove(self._tmpSvgFilename)
 
     def setPos(self, *args):
         if len(args) == 1:
