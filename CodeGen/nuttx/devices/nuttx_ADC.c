@@ -52,7 +52,7 @@ static void init(python_block *block)
   if (fd == 0)
     {
       int oflag = O_RDONLY;
-      if (!sw_trig)
+      if (sw_trig == 0)
         {
           oflag |= O_NONBLOCK;
         }
@@ -131,7 +131,7 @@ static void inout(python_block *block)
 
   /* Check if we need to SW trigger the ADC */
 
-  if (sw_trig)
+  if (sw_trig != 0)
     {
       ret = ioctl(fd, ANIOC_TRIGGER, 0);
       if (ret < 0)
@@ -153,6 +153,7 @@ static void inout(python_block *block)
    * Theoretically, an automatic AD converter may be faster than
    * the readings. This way, the number of reads must be limited.
    */
+  printf("read");
   nbytes = read(fd, sample, readsize);
   if (nbytes <= 0)
     {
