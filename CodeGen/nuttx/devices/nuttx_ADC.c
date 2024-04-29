@@ -45,12 +45,18 @@ static void init(python_block *block)
 {
   int * intPar = block->intPar;
   int fd = intPar[block->nout + 1];
+  int sw_trig = intPar[block->nout + 3];
 
   /* Open the device */
 
   if (fd == 0)
     {
-      fd = open(block->str, O_RDONLY | O_NONBLOCK);
+      int oflag = O_RDONLY;
+      if (!sw_trig)
+        {
+          oflag |= O_NONBLOCK;
+        }
+      fd = open(block->str, oflag);
       if (fd < 0)
         {
           fprintf(stderr,"Error opening device: %s\n", block->str);
@@ -116,13 +122,12 @@ static void inout(python_block *block)
   int sw_trig = intPar[block->nout + 3];
   int readsize = conf_ch*sizeof(struct adc_msg_s);
   int nbytes;
-  int read_tries = 0;
 
   /* Buffers for reading */
 
   struct adc_msg_s sample[conf_ch];
-  int32_t cumsum[conf_ch];           /* The same datatype as sample.am_data */
-  memset((void *)cumsum, 0, sizeof(cumsum));
+  //int32_t cumsum[conf_ch];           /* The same datatype as sample.am_data */
+  //memset((void *)cumsum, 0, sizeof(cumsum));
 
   /* Check if we need to SW trigger the ADC */
 
@@ -148,51 +153,67 @@ static void inout(python_block *block)
    * Theoretically, an automatic AD converter may be faster than
    * the readings. This way, the number of reads must be limited.
    */
-
-
-  while (read_tries <= MAX_ADC_READS)
+  nbytes = read(fd, sample, readsize);
+  if (nbytes <= 0)
     {
-      nbytes = read(fd, sample, readsize);
-      if (nbytes <= 0)
+      int errval = errno;
+      if (errval == EAGAIN)
         {
-          int errval = errno;
-          if (errval == EAGAIN)
-            {
-              break;
-            }
-          if (errval != EINTR)
-            {
-              fprintf(stderr,"adc_main: read %s failed: %d\n",
-                      block->str, errval);
-              close(fd);
-              exit(1);
-            }
+          return;
         }
-      else if (nbytes < readsize)
+      if (errval != EINTR)
         {
-          /* The data is somehow not complete, break. */
-
-          break;
-        }  
-      else
-        {
-          /* Data read ok. */
-
-          for (i = 0; i < conf_ch; ++i)
-            {
-              cumsum[i] += sample[i].am_data; 
-            }
+          fprintf(stderr,"adc_main: read %s failed: %d\n",
+                  block->str, errval);
+          close(fd);
+          exit(1);
         }
-      read_tries++;
     }
 
-  /* Flush all remaining data from the fifo. We need newer data afterwards. */
+
+  //while (read_tries <= MAX_ADC_READS)
+  //  {
+  //    nbytes = read(fd, sample, readsize);
+  //    if (nbytes <= 0)
+  //      {
+  //        int errval = errno;
+  //        if (errval == EAGAIN)
+  //          {
+  //            break;
+  //          }
+  //        if (errval != EINTR)
+  //          {
+  //            fprintf(stderr,"adc_main: read %s failed: %d\n",
+  //                    block->str, errval);
+  //            close(fd);
+  //            exit(1);
+  //          }
+  //      }
+  //    else if (nbytes < readsize)
+  //      {
+  //        /* The data is somehow not complete, break. */
+
+  //        break;
+  //      }  
+  //    else
+  //      {
+  //        /* Data read ok. */
+
+  //        for (i = 0; i < conf_ch; ++i)
+  //          {
+  //            cumsum[i] += sample[i].am_data; 
+  //          }
+  //      }
+  //    read_tries++;
+  //  }
+
+  ///* Flush all remaining data from the fifo. We need newer data afterwards. */
 
   ioctl(fd, ANIOC_RESET_FIFO, 0);
-  if (read_tries == 0)
-    {
-      return;
-    }
+  //if (read_tries == 0)
+  //  {
+  //    return;
+  //  }
 
   /* Passing the outputs to only those channels set in block parameters by the user */
 
@@ -203,7 +224,7 @@ static void inout(python_block *block)
         {
           if (sample[j].am_channel == intPar[i])
             {
-              y[0] = maprD2D((double) cumsum[j]/res/read_tries, realPar[0], realPar[1]);
+              y[0] = maprD2D((double) sample[j].am_data/res, realPar[0], realPar[1]);
               break;
             }
         }
