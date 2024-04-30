@@ -126,8 +126,6 @@ static void inout(python_block *block)
   /* Buffers for reading */
 
   struct adc_msg_s sample[conf_ch];
-  //int32_t cumsum[conf_ch];           /* The same datatype as sample.am_data */
-  //memset((void *)cumsum, 0, sizeof(cumsum));
 
   /* Check if we need to SW trigger the ADC */
 
@@ -143,17 +141,8 @@ static void inout(python_block *block)
         }
     }
 
-  /* Read the data from all configured channels.
-   * Since the read is noblocking, an error is returned if data
-   * is not ready, yet. This way, multiple reads can be done during
-   * one call of this function.
-   *
-   * For example, if the ADC is not SW triggered and collects 
-   * data automatically, an average can be calculated instantly.
-   * Theoretically, an automatic AD converter may be faster than
-   * the readings. This way, the number of reads must be limited.
-   */
-  printf("read");
+  /* Read the data from all configured channels. */
+
   nbytes = read(fd, sample, readsize);
   if (nbytes <= 0)
     {
@@ -171,50 +160,9 @@ static void inout(python_block *block)
         }
     }
 
-
-  //while (read_tries <= MAX_ADC_READS)
-  //  {
-  //    nbytes = read(fd, sample, readsize);
-  //    if (nbytes <= 0)
-  //      {
-  //        int errval = errno;
-  //        if (errval == EAGAIN)
-  //          {
-  //            break;
-  //          }
-  //        if (errval != EINTR)
-  //          {
-  //            fprintf(stderr,"adc_main: read %s failed: %d\n",
-  //                    block->str, errval);
-  //            close(fd);
-  //            exit(1);
-  //          }
-  //      }
-  //    else if (nbytes < readsize)
-  //      {
-  //        /* The data is somehow not complete, break. */
-
-  //        break;
-  //      }  
-  //    else
-  //      {
-  //        /* Data read ok. */
-
-  //        for (i = 0; i < conf_ch; ++i)
-  //          {
-  //            cumsum[i] += sample[i].am_data; 
-  //          }
-  //      }
-  //    read_tries++;
-  //  }
-
-  ///* Flush all remaining data from the fifo. We need newer data afterwards. */
+  /* Flush all remaining data from the fifo. We need newer data afterwards. */
 
   ioctl(fd, ANIOC_RESET_FIFO, 0);
-  //if (read_tries == 0)
-  //  {
-  //    return;
-  //  }
 
   /* Passing the outputs to only those channels set in block parameters by the user */
 
