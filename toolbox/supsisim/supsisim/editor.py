@@ -250,6 +250,7 @@ class Editor(QObject):
                 pos1 = QPointF(pt.x(), self.conn.pos2.y())
                 self.conn.connPoints.append(self.gridPos(pos1))
         self.conn.clean()
+        self.conn.cleanPts()
         self.conn.update_path()
         self.conn = None
  
@@ -270,15 +271,19 @@ class Editor(QObject):
             self.conn.connPoints.insert(0,self.gridPos(pos1))
                 
         self.conn.clean()
+        self.conn.cleanPts()
         self.conn.update_path()
         self.conn = None
  
     def deleteConn(self):
-        self.scene.DgmToUndo()
-        self.scene.item.remove()
-        self.removeNodes()
-        self.redrawNodes()
-    
+        try:
+            self.scene.DgmToUndo()
+            self.scene.item.remove()
+            self.removeNodes()
+            self.redrawNodes()
+        except:
+            pass
+        
     def addConn(self):
         self.scene.DgmToUndo()
         c = self.scene.item
@@ -354,6 +359,11 @@ class Editor(QObject):
     # Functions on diagram items
     
     def redrawSelectedItems(self):
+        if len(self.scene.selectedItems())==1:
+            mvFlag = False
+        else:
+            mvFlag = True
+        
         for item in self.scene.selectedItems():
             if isinstance(item, Block):
                 item.setPos(item.scenePos())
@@ -361,7 +371,7 @@ class Editor(QObject):
                     try:
                         for conn in el.connections:
                             conn.clean()
-                            conn.update_pos_from_ports()
+                            conn.update_pos_from_ports(mvFlag)
                     except:
                         pass
 
@@ -454,6 +464,9 @@ class Editor(QObject):
                 dgmSubsystems.append(item)
             elif isinstance(item, Block):
                 dgmBlocks.append(item)
+            elif isinstance(item, Connection):
+                self.scene.item = item
+                self.deleteConn()
             else:
                 pass
         for item in dgmBlocks:
