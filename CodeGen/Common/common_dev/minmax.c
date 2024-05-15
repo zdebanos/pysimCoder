@@ -60,7 +60,6 @@ void maxFromNInputs(int Flag, python_block *block)
   case CG_INIT:
   case CG_OUT:
   case CG_END:
-  case CG_STUPD:
     for (i = 0; i < block->nin; ++i) {
       double num = u[i][0];
       if (num > max) {
