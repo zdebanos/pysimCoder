@@ -187,8 +187,6 @@ class MainWindow(QMainWindow, form_class):
         self.sbNsig.valueChanged.connect(self.sbNsigValue)
         self.tableSig.setColumnWidth(0, 150)
 
-<<<<<<< HEAD
-=======
         self.actionOpen.triggered.connect(self.openFile)
         self.actionSave.triggered.connect(self.saveFile)
         self.actionSave_As.triggered.connect(self.saveAsFile)
@@ -289,7 +287,6 @@ class MainWindow(QMainWindow, form_class):
         if self.fname != '':
             d = self.getFields(self.fname)
 
->>>>>>> master
     def sbNsigValue(self):
         self.tableSig.setRowCount(self.sbNsig.value())
         self.tableSig.setColumnWidth(0, 150)
