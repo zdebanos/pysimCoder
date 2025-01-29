@@ -1,20 +1,24 @@
 #!/bin/sh
 
-# find all .py applications
-applications=$(find BlockEditor -name "*.py" -execdir basename {} \; | sed s/.py//)
-appname="$1"
+if [ $# -eq 0 ]; then
+    appname="pysimCoder"
+else
+    # find all .py applications
+    applications=$(find BlockEditor -name "*.py" -execdir basename {} \; | sed s/.py//)
+    appname="$1"
 
-# match whole words only
-if ! echo $applications | grep -w "$appname" > /dev/null 2>&1 ; then
-    scriptname=$(basename $0)
-    echo "Usage: $scriptname APP APPARGS"
-    echo "APP is one of the following:"
-    echo "$applications"
-    exit 1
+    # match whole words only
+    if ! echo $applications | grep -w "$appname" > /dev/null 2>&1 ; then
+        scriptname=$(basename $0)
+        echo "Usage: $scriptname APP APPARGS"
+        echo "APP is one of the following:"
+        echo "$applications"
+        exit 1
+    fi
+
+    # only APP arguments
+    shift
 fi
-
-# only APP arguments
-shift
 
 export PYSUPSICTRL="$( cd "$(dirname "$0")" ; pwd )"
 
