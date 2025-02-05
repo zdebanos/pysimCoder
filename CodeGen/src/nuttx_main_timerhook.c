@@ -1,0 +1,351 @@
+#include <stdlib.h>
+#include <stdio.h>
+#include <stdbool.h>
+#include <stdint.h>
+#include <time.h>
+#include <sched.h>
+#include <signal.h>
+#include <unistd.h>
+#include <string.h>
+#include <fcntl.h>
+#include <pthread.h>
+#include <sys/ioctl.h>
+#include <poll.h>
+
+#include <nuttx/config.h>
+#include <nuttx/timers/timer.h>
+
+#ifdef HAVE_MLOCK
+#include <sys/mman.h>
+#endif
+
+#ifdef CANOPEN
+void canopen_synch(void);
+#endif
+
+#define XNAME(x,y)  x##y
+#define NAME(x,y)   XNAME(x,y)
+
+#define TIMER_DEV "/dev/timer9"
+
+int NAME(MODEL,_init)(void);
+int NAME(MODEL,_isr)(double);
+int NAME(MODEL,_end)(void);
+double NAME(MODEL,_get_tsamp)(void);
+
+static volatile int end = 0;
+static double T = 0.0;
+static double Tsamp;
+
+/* Options presettings */
+
+static char rtversion[] = "0.9";
+static int prio = 99;
+static int verbose = 0;
+static int wait = 0;
+static int extclock = 0;
+static int benchmark = 0;
+static int nloops = 0; 
+static int maxlat_wakeup = 0;
+static int maxlat_afterisr = 0;
+double FinalTime = 0.0;
+
+double get_run_time()
+{
+  return(T);
+}
+
+double get_Tsamp()
+{
+  return(Tsamp);
+}
+
+int get_priority_for_com(void)
+{
+  if (prio < 0)
+    {
+      return -1;
+    }
+  else
+    {
+      return prio - 1;
+    }
+}
+
+static int timespec_diff_us(struct timespec t1, struct timespec t2)
+{
+	int diff;
+	diff = 1000000 * ((int) t1.tv_sec - (int) t2.tv_sec);
+	diff += ((int) t1.tv_nsec - (int) t2.tv_nsec) / 1000;
+	return diff;
+}
+
+static void *benchmark_task(void *p)
+{
+  /* set the priority of the task to a low level */
+  
+  struct sched_param param;
+  param.sched_priority = (prio > 20) ? prio - 20 : 1; 
+  pthread_setschedparam(pthread_self(), SCHED_RR, &param);
+
+  while (!end)
+    {
+      usleep(1000*1000);
+      printf("Nloops: %d, maxlat_wakeup: %d, maxlat_afterisr: %d\n",
+             nloops, maxlat_wakeup, maxlat_afterisr);
+    } 
+  
+  return NULL;
+}
+
+static void *rt_task(void *p)
+{
+  int ret;
+  int timerfd;
+  int loops;
+  uint32_t maxtimeout;
+  uint32_t req_timeout;
+  uint32_t lat, maxlat1, maxlat2;
+  struct timer_notify_s notify;
+  struct timer_status_s tstatus;
+  struct pollfd fds[1];
+  struct sigevent notify_event;
+  struct sched_param param;
+  struct timespec curtime, starttime;
+  pthread_t bthrd;
+
+  /* initialize sigevent, SIGEV_NONE is sufficient */
+
+  memset(&notify_event, 0, sizeof(struct sigevent));
+  notify_event.sigev_notify = SIGEV_NONE;
+  
+  /* fill in the timer_notify_s struct */
+
+  notify.periodic = true;
+  notify.pid      = getpid();
+  notify.event    = notify_event;
+
+  /* Timerhook related data */
+  
+  param.sched_priority = prio;
+  if (sched_setscheduler(0, SCHED_FIFO, &param) == -1)
+    {
+      perror("sched_setscheduler failed");
+      exit(-1);
+    }
+  
+  timerfd = open(TIMER_DEV, O_RDWR);
+  if (timerfd < 0)
+    {
+      perror("timer open");
+      exit(-1);
+    }
+  
+  /* prepare for poll */
+
+  fds[0].fd = timerfd;
+  fds[0].events = POLLIN;
+
+#ifdef HAVE_MLOCK
+  mlockall(MCL_CURRENT | MCL_FUTURE);
+#endif
+
+  Tsamp = NAME(MODEL, _get_tsamp)();
+  req_timeout = (uint32_t) (Tsamp * USEC_PER_SEC);
+  
+  ret = ioctl(timerfd, TCIOC_MAXTIMEOUT, (unsigned long)((uintptr_t) &maxtimeout));
+  if (ret < 0)
+    {
+      perror("timer maxtimeout");
+      exit(-1);
+    }
+
+  if (req_timeout > maxtimeout)
+    {
+      printf("Can't set such sampling period (maximum = %lu)\n", maxtimeout);
+      exit(-1);
+    }
+  
+  ret = ioctl(timerfd, TCIOC_SETTIMEOUT, (unsigned long)req_timeout);
+  if (ret < 0)
+    {
+      perror("timer settimeout");
+      exit(-1);
+    }
+  
+  ret = ioctl(timerfd, TCIOC_NOTIFICATION, (unsigned long)((uintptr_t) &notify));
+  if (ret < 0)
+    {
+      perror("notify timer");
+      exit(-1);
+    }
+  
+  /* start the benchmark logger, if needed */
+  
+  if (benchmark)
+    {
+      pthread_create(&bthrd, NULL, benchmark_task, NULL);
+    }
+  
+  NAME(MODEL, _init)();
+
+#ifdef CANOPEN
+  canopen_synch();
+#endif
+  
+  /* start the loop */
+  
+  ret = ioctl(timerfd, TCIOC_START);
+  if (ret < 0)
+    {
+      perror("timer start");
+      exit(-1);
+    }
+  
+  clock_gettime(CLOCK_MONOTONIC, &starttime);
+  maxlat1 = maxlat2 = 0;
+  loops = 0;
+
+  while (!end)
+    {
+      ret = poll(fds, 1, -1);
+      if (ret < 0)
+        {
+          perror("poll timer");
+          break;
+        }
+      if (benchmark)
+        {
+          loops += 1;
+          ret = ioctl(timerfd, TCIOC_GETSTATUS, (unsigned long)((uintptr_t) &tstatus));
+          if (ret < 0)
+            {
+              perror("timer getstatus");
+              exit(-1);
+            }
+          lat = tstatus.timeout - tstatus.timeleft;
+          if (lat > maxlat1)
+            {
+              maxlat1 = lat;
+            }
+        }
+
+      /* periodic task */
+
+      NAME(MODEL,_isr)(T);
+      
+      if (benchmark)
+        {
+          ret = ioctl(timerfd, TCIOC_GETSTATUS, (unsigned long)((uintptr_t) &tstatus));
+          if (ret < 0)
+            {
+              perror("timer getstatus");
+              exit(-1);
+            }
+          lat = tstatus.timeout - tstatus.timeleft;
+          if (lat > maxlat2)
+            {
+              maxlat2 = lat;
+            }
+          
+          clock_gettime(CLOCK_MONOTONIC, &curtime);
+          if (timespec_diff_us(curtime, starttime) >= USEC_PER_SEC)
+            {
+              nloops = loops;
+              maxlat_wakeup = maxlat1;
+              maxlat_afterisr = maxlat2;
+              loops = 0;
+              maxlat1 = 0;
+              maxlat2 = 0;
+              starttime = curtime;
+            }
+        }
+      
+#ifdef CANOPEN
+          canopen_synch();
+#endif
+    }
+  
+  ret = ioctl(timerfd, TCIOC_STOP);
+  if (ret < 0)
+    {
+      perror("timer stop");
+      exit(-1);
+    }
+  
+  NAME(MODEL,_end)();
+  close(timerfd);
+  if (benchmark)
+    {
+      pthread_join(bthrd, NULL);
+    }
+  pthread_exit(0);
+}
+
+void endme(int n)
+{
+  end = 1;
+}
+
+void print_usage(void)
+{
+  puts(  "\nUsage:  'RT-model-name' [OPTIONS]\n"
+         "\n"
+         "OPTIONS:\n"
+         "  -h  print usage\n"
+	 "  -f <final time> set the final time of the execution\n"
+	 "  -v  verbose output\n"
+	 "  -p <priority>  set rt task priority (default 99)\n"
+	 "  -e  external clock\n"
+	 "  -w  wait to start\n"
+	 "  -V  print version\n"
+	 "\n");
+}
+
+static void proc_opt(int argc, char *argv[])
+{
+  int i;
+  while((i = getopt(argc, argv, "ef:hp:vVwb")) != -1)
+    {
+      switch (i){
+      case 'h':
+        print_usage();
+        exit(0);
+        break;
+      case 'p':
+        prio = atoi(optarg);
+        break;
+      case 'v':
+        verbose = 1;
+        break;
+      case 'w':
+        wait = 1;
+        break;
+      case 'b':
+        benchmark = 1;
+        break;
+      case 'V':
+        printf("Version %s\n", rtversion);
+        exit(0);
+        break;
+      case 'f':
+        break;
+      }
+    }
+}
+
+int main(int argc, char** argv)
+{
+  pthread_t thrd;
+  int fd;
+
+  proc_opt(argc, argv);
+
+  signal(SIGINT,endme);
+  signal(SIGKILL,endme);
+
+  pthread_create(&thrd, NULL, rt_task, NULL);
+
+  pthread_join(thrd, NULL);
+  return 0;
+}

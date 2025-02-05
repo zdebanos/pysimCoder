@@ -76,7 +76,7 @@ LDFLAGS  += --entry=__start
 
 ELF_FILE_LDSCRIPT ?= $(wildcard $(NUTTX_EXPORT)/scripts/gnu-elf.ld)
 
-MAIN = nuttx_main_timehook
+MAIN = nuttx_main_systemtickhook
 ADD_FILES = $$ADD_FILES$$
 
 ifneq ($(EMBEDROMFS),)
