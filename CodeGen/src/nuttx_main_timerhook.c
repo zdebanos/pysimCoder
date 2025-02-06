@@ -26,7 +26,9 @@ void canopen_synch(void);
 #define XNAME(x,y)  x##y
 #define NAME(x,y)   XNAME(x,y)
 
-#define TIMER_DEV "/dev/timer9"
+#define TIMER_DEV       ((const char *)"/dev/timer9")
+#define PERIOD_WATCHDOG ((uint32_t)1000000)
+#define LOW_PRIORITY    ((int)50)
 
 int NAME(MODEL,_init)(void);
 int NAME(MODEL,_isr)(double);
@@ -45,10 +47,13 @@ static int verbose = 0;
 static int wait = 0;
 static int extclock = 0;
 static int benchmark = 0;
-static int nloops = 0; 
-static int maxlat_wakeup = 0;
-static int maxlat_afterisr = 0;
 double FinalTime = 0.0;
+
+/* For RT task benchmark */
+
+volatile static int nloops = 0;
+volatile static int maxlat_wakeup = 0;
+volatile static int maxlat_afterisr = 0;
 
 double get_run_time()
 {
@@ -85,7 +90,7 @@ static void *benchmark_task(void *p)
   /* set the priority of the task to a low level */
   
   struct sched_param param;
-  param.sched_priority = (prio > 20) ? prio - 20 : 1; 
+  param.sched_priority = LOW_PRIORITY;
   pthread_setschedparam(pthread_self(), SCHED_RR, &param);
 
   while (!end)
@@ -172,7 +177,7 @@ static void *rt_task(void *p)
       perror("timer settimeout");
       exit(-1);
     }
-  
+
   ret = ioctl(timerfd, TCIOC_NOTIFICATION, (unsigned long)((uintptr_t) &notify));
   if (ret < 0)
     {
@@ -186,8 +191,12 @@ static void *rt_task(void *p)
     {
       pthread_create(&bthrd, NULL, benchmark_task, NULL);
     }
-  
+
   NAME(MODEL, _init)();
+
+  /* Wait for connections a bit */
+
+  usleep(1000*1000);
 
 #ifdef CANOPEN
   canopen_synch();
@@ -201,7 +210,7 @@ static void *rt_task(void *p)
       perror("timer start");
       exit(-1);
     }
-  
+
   clock_gettime(CLOCK_MONOTONIC, &starttime);
   maxlat1 = maxlat2 = 0;
   loops = 0;
