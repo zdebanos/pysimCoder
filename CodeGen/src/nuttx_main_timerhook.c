@@ -18,6 +18,8 @@
  * License for the specific language governing permissions and limitations
  * under the License.
  *
+ * Author: Stepan Pressl <pressl.stepan@gmail.com>
+ *
  ****************************************************************************/
 
 /****************************************************************************
@@ -52,7 +54,11 @@
 #define XNAME(x,y)  x##y
 #define NAME(x,y)   XNAME(x,y)
 
-#define TIMER_DEV       ((const char *)"/dev/timer9")
+#ifndef PYSIM_NUTTX_SAMPLETIMER
+#error "You need to define PYSIM_NUTTX_SAMPLETIMER (e.g. /dev/timer0)"
+#endif
+
+#define TIMER_DEV       ((const char *)PYSIM_NUTTX_SAMPLETIMER)
 #define PERIOD_WATCHDOG ((uint32_t)1000000)
 #define LOW_PRIORITY    ((int)50)
 
