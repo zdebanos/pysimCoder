@@ -297,17 +297,17 @@ def genCode(model, Tsamp, blocks, rkstep = 10):
     f.write("}\n\n")
     f.close()
 
-def genMake(model, template, addObj = '', addBuildArgs = ''):
+def genMake(model, template, addObj = '', addCDefs = ''):
     """Generate the Makefile
 
     Call: genMake(model, template)
 
     Parameters
     ----------
-    model        : Model name
-    template     : Template makefile
-    addObj       : Additional object files
-    addBuildArgs : Additional build arguments
+    model    : Model name
+    template : Template makefile
+    addObj   : Additional object files
+    addCDefs : Additional build arguments
 
     Returns
     -------
@@ -320,7 +320,7 @@ def genMake(model, template, addObj = '', addBuildArgs = ''):
     f.close()
     mf = mf.replace('$$MODEL$$',model)
     mf = mf.replace('$$ADD_FILES$$',addObj)
-    mf = mf.replace('$$ADDITIONAL_DEFINES$$', addBuildArgs)
+    mf = mf.replace('$$ADDITIONAL_DEFINES$$', addCDefs)
     f = open('Makefile','w')
     f.write(mf)
     f.close()

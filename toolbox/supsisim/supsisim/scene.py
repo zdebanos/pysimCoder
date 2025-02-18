@@ -54,7 +54,8 @@ class Scene(QGraphicsScene):
 
         self.template = 'sim.tmf'
         self.addObjs = ''
-        self.addBuildArgs = ''
+        self.addCDefs = ''
+        self.addMakeDefs = ''
         self.Ts = '0.01'
         self.script = ''
         self.Tf = '10'
@@ -91,8 +92,8 @@ class Scene(QGraphicsScene):
             }
         dataDict['init'] = init
 
-        keys = ['template', 'Ts', 'AddObj', 'AddBuildArgs', 'script', 'Tf', 'prio']
-        vals = [self.template, self.Ts, self.addObjs, self.addBuildArgs, self.script, self.Tf, self.prio]
+        keys = ['template', 'Ts', 'AddObj', 'AddCDefs', 'AddMakeDefs', 'script', 'Tf', 'prio']
+        vals = [self.template, self.Ts, self.addObjs, self.addCDefs, self.addMakeDefs, self.script, self.Tf, self.prio]
         dataDict['simulate'] = dict(zip(keys, vals))
 
         keys = ['used', 'ip', 'port', 'user', 'passwd', 'devid', 'mount', 'tree']
@@ -166,9 +167,12 @@ class Scene(QGraphicsScene):
         addObjs = sim.findtext('AddObj')
         if addObjs==None or addObjs=='':
             addObjs=''
-        addBuildArgs = sim.findtext('AddBuildArgs')
-        if addBuildArgs==None or addBuildArgs=='':
-            addBuildArgs=''
+        addCDefs = sim.findtext('AddCDefs')
+        if addCDefs == None or addCDefs == '':
+            addCDefs = ''
+        addMakeDefs = sim.findtext('AddMakeDefs')
+        if addMakeDefs == None or addMakeDefs == '':
+            addMakeDefs = ''
         script = sim.findtext('ParScript')
         if script==None or script=='':
             script=''
@@ -182,7 +186,8 @@ class Scene(QGraphicsScene):
                 'template' : sim.findtext('Template'),
                 'Ts' : sim.findtext('Ts'),
                 'AddObj' : addObjs,
-                'AddBuildArgs' : addBuildArgs,
+                'AddCDefs' : addCDefs,
+                'AddMakeDefs' : addMakeDefs,
                 'script' : script,
                 'Tf' : Tf,
                 'prio' : prio,
@@ -252,7 +257,8 @@ class Scene(QGraphicsScene):
             self.template = dataDict['simulate']['template']
             self.Ts = dataDict['simulate']['Ts']
             self.addObjs = dataDict['simulate']['AddObj']
-            self.addBuildArgs = dataDict['simulate']['AddBuildArgs']
+            self.addCDefs = dataDict['simulate']['AddCDefs']
+            self.addMakeDefs = dataDict['simulate']['AddMakeDefs']
             self.script = dataDict['simulate']['script']
             self.Tf = dataDict['simulate']['Tf']
             self.prio = dataDict['simulate']['prio']
@@ -385,7 +391,8 @@ class Scene(QGraphicsScene):
         dialog = RTgenDlg(self)
         dialog.template.setText(self.template)
         dialog.addObjs.setText(self.addObjs)
-        dialog.addBuildArgs.setText(self.addBuildArgs)
+        dialog.addCDefs.setText(self.addCDefs)
+        dialog.addMakeDefs.setText(self.addMakeDefs)
         dialog.Ts.setText(self.Ts)
         dialog.parscript.setText(self.script)
         dialog.Tf.setText(self.Tf)
@@ -396,7 +403,8 @@ class Scene(QGraphicsScene):
 
         self.template = str(dialog.template.text())
         self.addObjs = str(dialog.addObjs.text())
-        self.addBuildArgs = str(dialog.addBuildArgs.text())
+        self.addCDefs = str(dialog.addCDefs.text())
+        self.addMakeDefs = str(dialog.addMakeDefs.text())
         self.Ts = str(dialog.Ts.text())
         self.script = str(dialog.parscript.text())
         self.prio =  str(dialog.prio.text())
@@ -518,14 +526,14 @@ class Scene(QGraphicsScene):
         return items
 
     def codegen(self, flag):
-        def _parseAddBuildArgs(addBuildArgs: str) -> str:
+        def _parseAddCDefs(addCDefs: str) -> str:
             ret = ''
             # the splitter is a comma, then check the syntax
-            addBuildArgs = addBuildArgs.strip()
-            if addBuildArgs == '':
+            addCDefs = addCDefs.strip()
+            if addCDefs == '':
                 # empty
                 return ret
-            args = list(addBuildArgs.split(','))
+            args = list(addCDefs.split(','))
             for a in args:
                 if a.count('=') != 1:
                     raise ValueError("Bad format of additional build args!")
@@ -542,7 +550,7 @@ class Scene(QGraphicsScene):
         # REVISIT: might check all passed arguments in the dialog.
 
         try:
-            self.parsedBuildArgs = _parseAddBuildArgs(self.addBuildArgs)
+            self.parsedAddCDefs = _parseAddCDefs(self.addCDefs)
         except ValueError as e:
             print(e)
             self.mainw.statusLabel.setText('Error by Code generation!')
@@ -742,7 +750,7 @@ class Scene(QGraphicsScene):
         fn.write('os.chdir("'+ fnm +'")\n')
         fn.write('genCode(fname, ' + self.Ts + ', blks)\n')
         fn.write("genMake(fname, '" + self.template + "', addObj = '" +
-                  self.addObjs + "', addBuildArgs = '" + self.parsedBuildArgs + "')\n")
+                  self.addObjs + "', addCDefs = '" + self.parsedAddCDefs + "')\n")
         fn.write('\nimport os\n')
         fn.write('os.system("make clean")\n')
         fn.write('os.system("make")\n')
