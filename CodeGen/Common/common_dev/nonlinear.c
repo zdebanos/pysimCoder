@@ -62,7 +62,7 @@ void saturation(int Flag, python_block *block)
     break;
   }
 }
-  
+
 void prod(int Flag, python_block *block)
 {
   int i;
@@ -120,6 +120,29 @@ void deadzone(int Flag, python_block *block)
   case CG_END:
     if ((u[0] >= start) && (u[0] <= end)) y[0] = 0.0;
     else y[0] = u[0];
+    break;
+  default:
+    break;
+  }
+}
+
+void antideadzone(int Flag, python_block *block)
+{
+  double *y = (double *) block->y[0];
+  double *u = (double *) block->u[0];
+  double lower = block->realPar[0];
+  double upper = block->realPar[1];
+
+  y = (double *) block->y[0];
+  switch (Flag) {
+  case CG_INIT:
+  case CG_OUT:
+  case CG_END:
+    if (u[0] >= 0) {
+      y[0] = u[0] + upper;
+    } else {
+      y[0] = u[0] + lower;
+    }
     break;
   default:
     break;
