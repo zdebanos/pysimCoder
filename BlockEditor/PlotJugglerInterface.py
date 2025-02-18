@@ -70,7 +70,7 @@ class ser_rcvServer4bytes(threading.Thread):
             data = self.st.unpack(val)            
             self.mainw.setData(data)
             
-    self.readThreadCleanup(SER4)
+        self.readThreadCleanup(SER4)
 
 class tcp_rcvServer(threading.Thread):
     def __init__(self, mainw):
