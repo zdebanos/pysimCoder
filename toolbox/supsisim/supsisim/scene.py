@@ -55,7 +55,7 @@ class Scene(QGraphicsScene):
         self.template = 'sim.tmf'
         self.addObjs = ''
         self.addCDefs = ''
-        self.addMakeDefs = ''
+        self.addMakeArgs = ''
         self.Ts = '0.01'
         self.script = ''
         self.Tf = '10'
@@ -92,8 +92,8 @@ class Scene(QGraphicsScene):
             }
         dataDict['init'] = init
 
-        keys = ['template', 'Ts', 'AddObj', 'AddCDefs', 'AddMakeDefs', 'script', 'Tf', 'prio']
-        vals = [self.template, self.Ts, self.addObjs, self.addCDefs, self.addMakeDefs, self.script, self.Tf, self.prio]
+        keys = ['template', 'Ts', 'AddObj', 'AddCDefs', 'AddMakeArgs', 'script', 'Tf', 'prio']
+        vals = [self.template, self.Ts, self.addObjs, self.addCDefs, self.addMakeArgs, self.script, self.Tf, self.prio]
         dataDict['simulate'] = dict(zip(keys, vals))
 
         keys = ['used', 'ip', 'port', 'user', 'passwd', 'devid', 'mount', 'tree']
@@ -170,9 +170,9 @@ class Scene(QGraphicsScene):
         addCDefs = sim.findtext('AddCDefs')
         if addCDefs == None or addCDefs == '':
             addCDefs = ''
-        addMakeDefs = sim.findtext('AddMakeDefs')
-        if addMakeDefs == None or addMakeDefs == '':
-            addMakeDefs = ''
+        addMakeArgs = sim.findtext('AddMakeArgs')
+        if addMakeArgs == None or addMakeArgs == '':
+            addMakeArgs = ''
         script = sim.findtext('ParScript')
         if script==None or script=='':
             script=''
@@ -187,7 +187,7 @@ class Scene(QGraphicsScene):
                 'Ts' : sim.findtext('Ts'),
                 'AddObj' : addObjs,
                 'AddCDefs' : addCDefs,
-                'AddMakeDefs' : addMakeDefs,
+                'AddMakeArgs' : addMakeArgs,
                 'script' : script,
                 'Tf' : Tf,
                 'prio' : prio,
@@ -258,7 +258,7 @@ class Scene(QGraphicsScene):
             self.Ts = dataDict['simulate']['Ts']
             self.addObjs = dataDict['simulate']['AddObj']
             self.addCDefs = dataDict['simulate']['AddCDefs']
-            self.addMakeDefs = dataDict['simulate']['AddMakeDefs']
+            self.addMakeArgs = dataDict['simulate']['AddMakeArgs']
             self.script = dataDict['simulate']['script']
             self.Tf = dataDict['simulate']['Tf']
             self.prio = dataDict['simulate']['prio']
@@ -392,7 +392,7 @@ class Scene(QGraphicsScene):
         dialog.template.setText(self.template)
         dialog.addObjs.setText(self.addObjs)
         dialog.addCDefs.setText(self.addCDefs)
-        dialog.addMakeDefs.setText(self.addMakeDefs)
+        dialog.addMakeArgs.setText(self.addMakeArgs)
         dialog.Ts.setText(self.Ts)
         dialog.parscript.setText(self.script)
         dialog.Tf.setText(self.Tf)
@@ -404,7 +404,7 @@ class Scene(QGraphicsScene):
         self.template = str(dialog.template.text())
         self.addObjs = str(dialog.addObjs.text())
         self.addCDefs = str(dialog.addCDefs.text())
-        self.addMakeDefs = str(dialog.addMakeDefs.text())
+        self.addMakeArgs = str(dialog.addMakeArgs.text())
         self.Ts = str(dialog.Ts.text())
         self.script = str(dialog.parscript.text())
         self.prio =  str(dialog.prio.text())
@@ -753,7 +753,7 @@ class Scene(QGraphicsScene):
                   self.addObjs + "', addCDefs = '" + self.parsedAddCDefs + "')\n")
         fn.write('\nimport os\n')
         fn.write('os.system("make clean")\n')
-        fn.write('os.system("make")\n')
+        fn.write('os.system("make ' + self.addMakeArgs + '")\n')
         fn.write('os.chdir("..")\n')
         fn.close()
 
