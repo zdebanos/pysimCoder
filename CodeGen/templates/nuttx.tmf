@@ -1,4 +1,5 @@
 MODEL = $$MODEL$$
+ADDITIONAL_DEFINES = $$ADDITIONAL_DEFINES$$
 all:  ../$(MODEL).elf ../$(MODEL).bin ../$(MODEL)
 
 # Enable or define during make invocation to embed content of the specified
@@ -141,7 +142,7 @@ endif
 
 INCLUDES += -I$(INCDIR) -I$(COMMON_INCDIR) $(NUTTX_INCLUDES)
 
-CFLAGS = $(TARGET_ARCH_FLAGS) $(ARCHWARNINGS) $(OPT_OPTS) $(INCLUDES) -DMODEL=$(MODEL)
+CFLAGS = $(TARGET_ARCH_FLAGS) $(ARCHWARNINGS) $(OPT_OPTS) $(INCLUDES) -DMODEL=$(MODEL) $(ADDITIONAL_DEFINES)
 
 CFLAGS += -I$(SHV_INC)
 ifneq ($(wildcard $(ULUT_INC)),)
