@@ -130,8 +130,8 @@ void antideadzone(int Flag, python_block *block)
 {
   double *y = (double *) block->y[0];
   double *u = (double *) block->u[0];
-  double lower = block->realPar[0];
-  double upper = block->realPar[1];
+  double upper = block->realPar[0];
+  double lower = block->realPar[1];
 
   y = (double *) block->y[0];
   switch (Flag) {
