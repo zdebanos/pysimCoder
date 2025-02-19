@@ -1,4 +1,5 @@
 MODEL = $$MODEL$$
+ADDITIONAL_DEFINES = $$ADDITIONAL_DEFINES$$
 all: default
 
 .PHONY: all default
