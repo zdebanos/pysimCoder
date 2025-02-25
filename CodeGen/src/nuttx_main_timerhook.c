@@ -370,6 +370,8 @@ static void print_usage(void)
     "  -f <final time> set the final time of the execution\n"
     "  -v  verbose output\n"
     "  -p <priority>  set rt task priority (default 99)\n"
+    "  -b  model timing benchmark, each second the number of model\n"
+    "      execution is printed, alongside worst case latencies"
     "  -e  external clock\n"
     "  -w  wait to start\n"
     "  -V  print version\n"
