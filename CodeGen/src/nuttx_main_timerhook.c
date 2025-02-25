@@ -2,6 +2,8 @@
  * CodeGen/src/nuttx_main_timerhook.c
  *
  * SPDX-License-Identifier: Apache-2.0
+ * SPDX-FileCopyrightText:  Stepan Pressl <pressl.stepan@gmail.com>
+ * SPDX-FileContributor:    Stepan Pressl <pressl.stepan@gmail.com>
  *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -281,7 +283,6 @@ static void *rt_task(void *p)
           perror("poll timer");
           break;
         }
-      time_counter += 1;
       if (benchmark)
         {
           loops += 1;
@@ -330,6 +331,8 @@ static void *rt_task(void *p)
               starttime = curtime;
             }
         }
+
+      time_counter += 1;
 
 #ifdef CANOPEN
           canopen_synch();
