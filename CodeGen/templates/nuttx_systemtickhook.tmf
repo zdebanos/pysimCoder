@@ -1,7 +1,6 @@
 MODEL = $$MODEL$$
-all: default
-
-.PHONY: all default
+ADDITIONAL_DEFINES = $$ADDITIONAL_DEFINES$$
+all:  ../$(MODEL).elf ../$(MODEL).bin ../$(MODEL)
 
 # Enable or define during make invocation to embed content of the specified
 # directory into ROM filesystem mounted into /etc on the target
@@ -21,8 +20,6 @@ EXT_SHV_INC = $(PYSUPSICTRL)/ExtLibs//libshv/libshvchainpack/c/include
 RM = rm -f
 FILES_TO_CLEAN = *.o $(MODEL) $(MODEL).elf $(MAIN)-builtintab.c
 
-MODEL_BINARIES := ../$(MODEL).bin ../$(MODEL)
-
 ifndef NUTTX_EXPORT
 $(warning Specify NUTTX_EXPORT)
 $(warning make_rtw NUTTX_EXPORT=/path/to/nuttx-export)
@@ -33,9 +30,9 @@ ifneq ($(wildcard $(NUTTX_EXPORT)/registry/*.bdat),)
 NUTTX_REGISTER_BINARIES ?= y
 endif
 
-ifneq ($(shell grep 'CONFIG_INTELHEX_BINARY[[:blank:]]*1' "$(NUTTX_EXPORT)/include/nuttx/config.h"),)
+ifneq ($(shell grep CONFIG_INTELHEX_BINARY $(NUTTX_EXPORT)/include/nuttx/config.h),)
 CONFIG_INTELHEX_BINARY = 1
-MODEL_BINARIES += ../$(MODEL).hex
+all:  ../$(MODEL).hex
 endif
 
 include $(NUTTX_EXPORT)/scripts/Make.defs
@@ -78,23 +75,13 @@ LDFLAGS_LD_SCRIPTS += $(LD_SCRIPTS:%=-T %)
 
 LDFLAGS  += --entry=__start
 
-ifndef LDELFFLAGS
 ELF_FILE_LDSCRIPT ?= $(wildcard $(NUTTX_EXPORT)/scripts/gnu-elf.ld)
-ifneq ($(ELF_FILE_LDSCRIPT),)
-LDELFFLAGS = $(LDFLAGS) -r -e main -T "$(ELF_FILE_LDSCRIPT)"
-endif
-endif
 
-ifneq ($(shell grep 'CONFIG_ELF[[:blank:]]*1' "$(NUTTX_EXPORT)/include/nuttx/config.h"),)
-CONFIG_ELF_BINARY = 1
-MODEL_BINARIES := ../$(MODEL).elf $(MODEL_BINARIES)
-endif
-
-MAIN = nuttx_main_timehook
+MAIN = nuttx_main_systemtickhook
 ADD_FILES = $$ADD_FILES$$
 
 ifneq ($(EMBEDROMFS),)
-ifeq ($(shell grep CONFIG_ETC_ROMFSMOUNTPT "$(NUTTX_EXPORT)/include/nuttx/config.h"),)
+ifeq ($(shell grep CONFIG_ETC_ROMFSMOUNTPT $(NUTTX_EXPORT)/include/nuttx/config.h),)
 $(error CONFIG_ETC_ROMFS and CONFIG_ETC_ROMFSMOUNTPT are required for EMBEDROMFS)
 endif
 ifeq ($(wildcard $(abspath $(EMBEDROMFS))),)
@@ -155,7 +142,7 @@ endif
 
 INCLUDES += -I$(INCDIR) -I$(COMMON_INCDIR) $(NUTTX_INCLUDES)
 
-CFLAGS = $(TARGET_ARCH_FLAGS) $(ARCHWARNINGS) $(OPT_OPTS) $(INCLUDES) -DMODEL=$(MODEL)
+CFLAGS = $(TARGET_ARCH_FLAGS) $(ARCHWARNINGS) $(OPT_OPTS) $(INCLUDES) -DMODEL=$(MODEL) $(ADDITIONAL_DEFINES)
 
 CFLAGS += -I$(SHV_INC)
 ifneq ($(wildcard $(ULUT_INC)),)
@@ -170,8 +157,6 @@ CXXFLAGS = $(TARGET_ARCH_FLAGS) $(ARCHCXXFLAGS) $(ARCHWARNINGSXX) $(OPT_OPTS) $(
 
 LIB = $(LIBDIR)/libpyblk.a
 
-default: $(MODEL_BINARIES)
-
 $(MAIN).c: $(MAINDIR)/$(MAIN).c $(MODEL).c
 	cp $< .
 
@@ -179,16 +164,15 @@ $(MAIN).c: $(MAINDIR)/$(MAIN).c $(MODEL).c
 	$(CC) -c -o $@ $(CFLAGS) $<
 
 ../$(MODEL).elf: $(OBJSSTAN) $(LIB)
-	[ -z "$(LDELFFLAGS)" ] || \
-	$(LD) -L $(NUTTX_EXPORT)/scripts $(LDELFFLAGS) \
-	  $(ADDITIONAL_LDFLAGS) -o $@ \
+	[ ! -e  $(ELF_FILE_LDSCRIPT) ] || \
+	$(LD) $(LDFLAGS) $(ADDITIONAL_LDFLAGS) -o $@ \
+	  -r -e main -T $(ELF_FILE_LDSCRIPT) \
 	  $(GCC_LD_OPTION)-Map $(GCC_LD_OPTION)$(notdir $@).map \
 	  $(OBJSSTAN) $(LIB) $(LIBS) $(ELF_MODULE_LIBS)
 	@echo "### Created ELF loadable file: $(MODEL).elf"
 
 ../$(MODEL): $(OBJSSTAN) $(OBJSSYSOVERRIDE) $(LIB)
-	$(LD) -L $(NUTTX_EXPORT)/scripts $(LDFLAGS) \
-	  $(ADDITIONAL_LDFLAGS) $(LDFLAGS_LD_SCRIPTS) \
+	$(LD) $(LDFLAGS) $(ADDITIONAL_LDFLAGS) $(LDFLAGS_LD_SCRIPTS) \
 	  -o $@ $(HEAD_OBJ:%=$(NUTTX_EXPORT)/startup/%) \
 	  $(OBJSSTAN) $(OBJSSYSOVERRIDE) $(LIB) $(SYSTEM_LIBS)
 	@echo "### Created executable: $(MODEL)"
@@ -202,3 +186,4 @@ $(MAIN).c: $(MAINDIR)/$(MAIN).c $(MODEL).c
 
 clean:
 	@$(RM) $(FILES_TO_CLEAN)
+	

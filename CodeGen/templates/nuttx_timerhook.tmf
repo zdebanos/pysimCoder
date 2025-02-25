@@ -91,7 +91,7 @@ CONFIG_ELF_BINARY = 1
 MODEL_BINARIES := ../$(MODEL).elf $(MODEL_BINARIES)
 endif
 
-MAIN = nuttx_main
+MAIN = nuttx_main_timerhook
 ADD_FILES = $$ADD_FILES$$
 
 ifneq ($(EMBEDROMFS),)
