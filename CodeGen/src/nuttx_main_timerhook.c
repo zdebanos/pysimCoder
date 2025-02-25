@@ -85,6 +85,7 @@ static void print_usage(void);
 static volatile int end = 0;
 static double T = 0.0;
 static double sampling_period;
+static int time_counter = 0;
 
 /* Options presettings */
 
@@ -160,6 +161,8 @@ static void *rt_task(void *p)
   struct timespec starttime;
   struct timespec T0;
   pthread_t bench_thrd;
+
+  time_counter = 0;
 
   /* initialize sigevent, SIGEV_NONE is sufficient */
 
@@ -278,6 +281,7 @@ static void *rt_task(void *p)
           perror("poll timer");
           break;
         }
+      time_counter += 1;
       if (benchmark)
         {
           loops += 1;
@@ -412,7 +416,7 @@ static void proc_opt(int argc, char *argv[])
 
 double get_run_time()
 {
-  return T;
+  return time_counter * sampling_period;
 }
 
 /****************************************************************************
