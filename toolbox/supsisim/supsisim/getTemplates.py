@@ -9,7 +9,7 @@ dictTemplates = {
                  'rt_nrt_iopl.tmf': embedded + fixed_step,
                  'rt.tmf' : embedded + fixed_step,
                  'fmurt.tmf' : embedded + fixed_step,
-                 'nuttx_timerhook.tmf' : embedded,
+                 'nuttx_devtimer.tmf' : embedded,
                  'nuttx_systemtickhook.tmf' : embedded,
                  'nuttx.tmf' : embedded,
                  'rt_co.tmf' :  embedded + fixed_step,
