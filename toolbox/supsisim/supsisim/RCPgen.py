@@ -396,6 +396,7 @@ def genMake(model, template, addObj = '', addCDefs = ''):
     model     : Model name
     template  : Template makefile
     addObj    : Additional object files
+    addCDefs  : Additional C Defines
 
     Returns
     -------
