@@ -26,6 +26,11 @@ SRCALL = $(wildcard $(COMMON_DIR)/common_dev/*.c)
 SRCALL += $(wildcard $(COMMON_DIR)/posix/*.c)
 SRCALL += serialOut.c
 
+# Add the pysimCoder SHV adaptation sources
+ifeq ($(SHV),1)
+SRCALL += $(wildcard $(COMMON_DIR)/shv-refactored/*.c)
+endif
+
 SHV_IN_NUTTX := $(shell grep -wc "CONFIG_NETUTILS_LIBSHVC" $(NUTTX_EXPORT)/include/nuttx/config.h)
 UNPACKLIB_DIR := $(PYSUPSICTRL)/CodeGen/nuttx/devices/unpacklib
 
@@ -129,6 +134,7 @@ ifeq ($(SHV),1)
 ifeq ($(SHV_IN_NUTTX),0)
 CC_FLAGS += -I$(SHV_COMPILED_INC_PATH)
 endif
+CC_FLAGS += -I$(COMMON_DIR)/shv-refactored/include
 endif
 CC_FLAGS_SCP = -c $(DBG) $(INCLUDE) $(CFLAGS) $(DEFINES)
 CC_FLAGS_FMU = -c $(DBG) $(INCLUDE) $(CFLAGS) -Wall -DFMI_COSIMULATION \
@@ -182,6 +188,12 @@ FMUinterface.o: FMUinterface.c
 %.o: sensors/%.c
 	@echo "CC: sensors/$$(basename $<)"
 	@$(CC) $(CC_FLAGS) $<
+
+ifeq ($(SHV),1)
+%.o: $(COMMON_DIR)/shv-refactored/%.c
+	@echo "CC: shv/$$(basename $<)"
+	@$(CC) $(CC_FLAGS) $<
+endif
 
 %.o: $(COMMON_DIR)/CAN_dev/%.c
 	@echo "CC: CAN_dev/$$(basename $<)"
