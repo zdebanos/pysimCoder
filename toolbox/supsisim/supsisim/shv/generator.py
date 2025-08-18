@@ -28,11 +28,12 @@ class ShvTreeGenerator:
         self.f.write(text)
 
         text = "#ifdef CONF_SHV_USED\n"
-        text += "#include <shv_tree.h>\n"
-        text += "#include <shv_pysim.h>\n"
-        text += "#include <shv_methods.h>\n"
-        text += "#include <shv_com.h>\n"
+        text += "#include <shv/tree/shv_connection.h>\n"
+        text += "#include <shv/tree/shv_tree.h>\n"
+        text += "#include <shv/tree/shv_methods.h>\n"
+        text += "#include <shv/tree/shv_com.h>\n"
         text += "#include <ulut/ul_utdefs.h>\n\n"
+        text += "#include \"shv_pysim.h\"\n"
         self.f.write(text)
 
         if environ["SHV_TREE_TYPE"] == "GSA":
@@ -49,12 +50,8 @@ class ShvTreeGenerator:
         self.f.write(text)
 
         if environ["SHV_USED"] == "True":
-            self.f.write("/* SHV related function and structres */\n\n")
+            self.f.write("/* SHV related function and structures */\n\n")
             self.f.write("#ifdef CONF_SHV_USED\n")
-            self.f.write(
-                "shv_con_ctx_t *shv_tree_init(python_block_name_map * block_map, const shv_node_t *static_root, int mode);\n"
-            )
-            self.f.write("void shv_tree_end(shv_con_ctx_t *ctx, int mode);\n\n")
 
             text = "python_block_name_map block_name_map_" + self.model + ";\n"
             text += (
@@ -65,6 +62,7 @@ class ShvTreeGenerator:
                 + "];\n"
             )
             text += "static shv_con_ctx_t *" + self.model + "_ctx;\n"
+            text += "static struct shv_connection shv_conn;\n"
             text += "#endif /* CONF_SHV_USED */\n\n"
             self.f.write(text)
 
@@ -552,35 +550,43 @@ class ShvTreeGenerator:
             + "}}}};\n\n"
         )
         self.f.write(text)
+        self.f.write("#endif /* CONF_SHV_TREE_STATIC */\n\n")
 
-        self.f.write("#endif /* CONF_SHV_TREE_STATIC */")
-
-    def generate_code(self) -> None:
+    def generate_init(self) -> None:
         text = "#ifdef CONF_SHV_USED\n"
-        text += '  setenv("SHV_BROKER_IP", "' + environ["SHV_BROKER_IP"] + '", 0);\n'
+        text += "int " + self.model + "_com_init(shv_attention_signaller at_signlr)\n"
+        text += "{\n"
+        text += "  /* Call shv_tree_init() to initialize SHV tree */\n"
+
+        if environ["SHV_TREE_TYPE"] != "GSA_STATIC":
+            text += "  const shv_node_t shv_tree_root = {};\n"
+
+        text += '  shv_connection_init(&shv_conn, SHV_TLAYER_TCPIP);\n'
+        text += '  shv_conn.broker_user = "' + environ["SHV_BROKER_USER"] + '";\n'
+        text += '  shv_conn.broker_password = "' + environ["SHV_BROKER_PASSWORD"] + '";\n'
+        text += '  shv_conn.broker_mount = "' + environ["SHV_BROKER_MOUNT"] + '";\n'
+        text += '  shv_conn.device_id = "' + environ["SHV_BROKER_DEV_ID"] + '";\n'
+        text += '  shv_conn.reconnect_period = 10;\n'
+        text += '  shv_conn.reconnect_retries = 0;\n'
+        text += '  shv_connection_tcpip_init(&shv_conn, "' + environ["SHV_BROKER_IP"] + \
+                '", ' + environ["SHV_BROKER_PORT"] + ');\n'
         text += (
-            '  setenv("SHV_BROKER_PORT", "' + environ["SHV_BROKER_PORT"] + '", 0);\n'
+            "  "
+            + self.model
+            + "_ctx = shv_tree_init(&block_name_map_"
+            + self.model
+            + ", &shv_tree_root, CONF_SHV_TREE_TYPE, "
+            + "&shv_conn, at_signlr);\n"
         )
-        text += (
-            '  setenv("SHV_BROKER_USER", "' + environ["SHV_BROKER_USER"] + '", 0);\n'
-        )
-        text += (
-            '  setenv("SHV_BROKER_PASSWORD", "'
-            + environ["SHV_BROKER_PASSWORD"]
-            + '", 0);\n'
-        )
-        text += (
-            '  setenv("SHV_BROKER_DEV_ID", "'
-            + environ["SHV_BROKER_DEV_ID"]
-            + '", 0);\n'
-        )
-        text += (
-            '  setenv("SHV_BROKER_MOUNT", "'
-            + environ["SHV_BROKER_MOUNT"]
-            + '", 0);\n\n'
-        )
+        text += "  if (" + self.model + "_ctx == NULL)\n"
+        text += "    return -1;\n"
+        text += "  return 0;\n"
+        text += "}\n"
+        text += "#endif /* CONF_SHV_USED */\n\n"
         self.f.write(text)
 
+    def generate_code(self) -> None:
+        self.f.write("#ifdef CONF_SHV_USED\n")
         self.f.write("/* SHV structures definition */\n\n")
 
         blks_names = []
@@ -676,25 +682,14 @@ class ShvTreeGenerator:
         )
         self.f.write(text)
 
-        self.f.write("/* Call shv_tree_init() to initialize SHV tree */\n\n")
-
-        if environ["SHV_TREE_TYPE"] != "GSA_STATIC":
-            text = "  const shv_node_t shv_tree_root = {};\n\n"
-            self.f.write(text)
-
-        text = (
-            "  "
-            + self.model
-            + "_ctx = shv_tree_init(&block_name_map_"
-            + self.model
-            + ", &shv_tree_root, CONF_SHV_TREE_TYPE);\n\n"
-        )
-        self.f.write(text)
 
         self.f.write("#endif /* CONF_SHV_USED */\n\n")
 
     def generate_end(self) -> None:
         text = "#ifdef CONF_SHV_USED\n"
+        text += "void " + self.model + "_com_end(void)\n"
+        text += "{\n"
         text += "  shv_tree_end(" + self.model + "_ctx, CONF_SHV_TREE_TYPE);\n"
+        text += "}\n"
         text += "#endif /* CONF_SHV_USED */\n\n"
         self.f.write(text)

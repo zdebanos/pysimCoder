@@ -182,6 +182,10 @@ def genCode(model, Tsamp, blocks, rkMethod='standard_RK4', epsAbs = 1e-6, epsRel
     if (environ['SHV_TREE_TYPE'] == 'GSA_STATIC') and (environ['SHV_USED'] == 'True'):
         shv_generator.generate_tree()
 
+    if (environ['SHV_USED'] == 'True'):
+        shv_generator.generate_init()
+        shv_generator.generate_end()
+
     f.write('/* Initialization function */\n\n')
     strLn = 'void ' + model + '_init(void)\n'
     strLn += '{\n'
@@ -366,9 +370,6 @@ def genCode(model, Tsamp, blocks, rkMethod='standard_RK4', epsAbs = 1e-6, epsRel
 
     if gslFlag:
         f.write('gsl_odeiv2_driver *driver;\n')
-
-    if environ['SHV_USED'] == 'True':
-        shv_generator.generate_end()
 
     for n in range(0,N):
         blk = Blocks[n]
