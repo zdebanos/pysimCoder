@@ -6,6 +6,16 @@
 #include <shv/chainpack/cchainpack.h>
 #include <string.h>
 
+#include <shv/tree/shv_tree.h>
+#include <shv/tree/shv_connection.h>
+#include <shv/tree/shv_com.h>
+
 extern const shv_dmap_t shv_blk_dmap;
+
+shv_con_ctx_t *shv_tree_init(python_block_name_map * block_map,
+                             const shv_node_t *static_root, int mode,
+                             struct shv_connection *conn,
+                             shv_attention_signaller at_signlr);
+void shv_tree_end(shv_con_ctx_t *ctx, int mode);
 
 #endif /* SHV_PYSIM_H */

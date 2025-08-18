@@ -27,9 +27,9 @@
 #include <shv/tree/shv_methods.h>
 #include <ulut/ul_utdefs.h>
 
-#include "shv_pysim.h"
+#include <shv_pysim.h>
 
-const shv_method_des_t * const shv_blk_dmap_items[] = {
+static const shv_method_des_t * const shv_blk_dmap_items[] = {
   &shv_dmap_item_dir,
   &shv_dmap_item_ls,
 };
@@ -47,7 +47,7 @@ const shv_dmap_t shv_blk_dmap = {.methods = {.items = (void **)shv_blk_dmap_item
  *
  ****************************************************************************/
 
-void shv_add_block(python_block_name_map *block_map, int index,
+static void shv_add_block(python_block_name_map *block_map, int index,
                    shv_node_t *item_blk, int mode)
 {
   shv_node_t *item_blk_par = shv_tree_node_new("parameters", &shv_dir_ls_dmap, mode);
@@ -142,7 +142,7 @@ void shv_add_block(python_block_name_map *block_map, int index,
  *
  ****************************************************************************/
 
-void shv_add_system_in(python_block_name_map *block_map, int index,
+static void shv_add_system_in(python_block_name_map *block_map, int index,
                        shv_node_t *item_blk, int mode)
 {
   /* For each block input */
@@ -177,7 +177,7 @@ void shv_add_system_in(python_block_name_map *block_map, int index,
  *
  ****************************************************************************/
 
-void shv_add_system_out(python_block_name_map *block_map, int index,
+static void shv_add_system_out(python_block_name_map *block_map, int index,
                        shv_node_t *item_blk, int mode)
 {
   /* For each block input */
@@ -212,7 +212,7 @@ void shv_add_system_out(python_block_name_map *block_map, int index,
  *
  ****************************************************************************/
 
-void shv_tree_create(python_block_name_map * block_map,
+static void shv_tree_create(python_block_name_map * block_map,
                      shv_node_t *shv_tree_root,
                      int mode)
 {
