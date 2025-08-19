@@ -8,8 +8,8 @@ INCLUDE =  -I$(GENERIC_INC) -I$(TARGET_INC)
 
 COMMON_DIR = $(PYSUPSICTRL)/CodeGen/Common
 EXT_LIBS = $(PYSUPSICTRL)/ExtLibs
-SHV_COMPILED_INC_PATH = $(EXT_LIBS)/shv-libs4c/_compiled/include
-SHV_COMPILED_LIB_PATH = $(EXT_LIBS)/shv-libs4c/_compiled/lib
+SHV_COMPILED_INC_PATH = $(EXT_LIBS)/shv-libs4c-nuttx/_compiled/include
+SHV_COMPILED_LIB_PATH = $(EXT_LIBS)/shv-libs5c-nuttx/_compiled/lib
 
 NUTTX_EXPORT = $(PWD)/../nuttx-export
 
@@ -148,12 +148,12 @@ ifeq ($(SHV),1)
 	@if [ "$(SHV_IN_NUTTX)" -lt 1 ]; then \
 		echo "Silicon Heaven library was not found in NuttX, using a cloned one."; \
 		cd $(EXT_LIBS); \
-		if [ ! -e shv-libs4c ]; then \
+		if [ ! -e shv-libs4c-nuttx ]; then \
 			if ! git clone https://github.com/silicon-heaven/shv-libs4c > /dev/null 2>&1; then \
 				echo "Failed cloning the Silicon Heaven library, try again."; \
 			else \
-				( cd shv-libs4c && git switch dev-zdebanos; git submodule update --recursive --init ) > /dev/null 2>&1; \
-				make -C shv-libs4c CONFIG_SHV_LIBS4C_PLATFORM="nuttx" \
+				( cd shv-libs4c-nuttx && git switch dev-zdebanos; git submodule update --recursive --init ) > /dev/null 2>&1; \
+				make -C shv-libs4c-nuttx CONFIG_SHV_LIBS4C_PLATFORM="nuttx" \
 					CC="$(CC)" \
 					CXX="$(CXX)" \
 					CFLAGS="$(CFLAGS)" \
@@ -244,8 +244,8 @@ install:
 	@mv $(LIB) $(PYSUPSICTRL)/CodeGen/nuttx/lib
 
 clean:
-	@echo "RM: shv-libs4c"
+	@echo "RM: shv-libs4c-nuttx"
 	@echo "RM: $(LIB)"
 	@echo "RM: *.o"
-	@rm -rf $(EXT_LIBS)/shv-libs4c
+	@rm -rf $(EXT_LIBS)/shv-libs4c-nuttx
 	@rm -f $(LIB) $(OBJ)
