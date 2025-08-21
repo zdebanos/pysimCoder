@@ -6,13 +6,6 @@ all: default
 # directory into ROM filesystem mounted into /etc on the target
 #EMBEDROMFS = romfs
 
-PYCODEGEN = $(PYSUPSICTRL)/CodeGen
-MAINDIR = $(PYCODEGEN)/src
-LIBDIR  = $(PYCODEGEN)/nuttx/lib
-INCDIR  = $(PYCODEGEN)/nuttx/include
-NUTTX_EXPORT = $(PYCODEGEN)/nuttx/nuttx-export
-COMMON_INCDIR = $(PYCODEGEN)/Common/include
-
 # If this path DOES not exist, we don't have any SHV support
 # or it is already included in NuttX.
 SHV_INC = $(PYSUPSICTRL)/ExtLibs/shv-libs4c-nuttx/_compiled/include
