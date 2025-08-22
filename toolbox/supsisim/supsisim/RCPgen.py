@@ -432,8 +432,13 @@ def genMake(model, template, addObj = '', addCDefs = ''):
     f.close()
     mf = mf.replace('$$MODEL$$',model)
     mf = mf.replace('$$ADD_FILES$$',addObj)
+
+    # Define SHV parameters for the build
     if environ.get('SHV_USED') == 'True':
         addCDefs += ' \'-DCONF_SHV_USED\''
+        if environ.get('SHV_UPDATES_USED') == 'True':
+            addCDefs += ' \'-DCONF_SHV_UPDATES_USED\''
+
     mf = mf.replace('$$ADDITIONAL_DEFINES$$', addCDefs)
     f = open('Makefile','w')
     f.write(mf)

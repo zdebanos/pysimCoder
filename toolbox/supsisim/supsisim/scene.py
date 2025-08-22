@@ -110,9 +110,9 @@ class Scene(QGraphicsScene):
         vals = [self.template, self.Ts, self.addObjs, self.addCDefs, self.addMakeArgs, self.script, self.intgMethod, self.epsAbs, self.epsRel, self.Tf, self.prio]
         dataDict['simulate'] = dict(zip(keys, vals))
 
-        keys = ['used', 'ip', 'port', 'user', 'passwd', 'devid', 'mount', 'tree']
+        keys = ['used', 'ip', 'port', 'user', 'passwd', 'devid', 'mount', 'tree', 'updates']
         vals = [self.SHV.used, self.SHV.ip, self.SHV.port, self.SHV.user, self.SHV.passw,
-                self.SHV.devid, self.SHV.mount, self.SHV.tree]
+                self.SHV.devid, self.SHV.mount, self.SHV.tree, self.SHV.updates]
         dataDict['SHV'] = dict(zip(keys, vals))
 
         self.saveItems(dataDict)
@@ -221,6 +221,7 @@ class Scene(QGraphicsScene):
             self.SHV.devid = dataDict['SHV']['devid']
             self.SHV.mount = dataDict['SHV']['mount']
             self.SHV.tree = dataDict['SHV']['tree']
+            self.SHV.updates = dataDict['SHV']['updates']
         except:
             pass
 
@@ -396,6 +397,7 @@ class Scene(QGraphicsScene):
         self.SHV.devid = str(dialog.SHVdevid.text())
         self.SHV.mount = str(dialog.SHVmount.text())
         self.SHV.tree = str(dialog.SHVtree.currentText())
+        self.SHV.updates = dialog.SHVUpdates.isChecked()
 
         if not self.SHV.tuned and self.brokerConnection is not None:
             self.brokerConnection.disconnect()
@@ -766,6 +768,9 @@ class Scene(QGraphicsScene):
             txt += 'os.environ["SHV_BROKER_DEV_ID"] = \"' + self.SHV.devid + '\"\n'
             txt += 'os.environ["SHV_BROKER_MOUNT"] = \"' + self.SHV.mount + "/" + self.SHV.devid + '\"\n'
             txt += 'os.environ["SHV_TREE_TYPE"] = \"' + self.SHV.tree + '\"\n\n'
+            # REVISIT: Only Nuttx is supported, now
+            if self.template == "nuttx.tmf" or self.template == "nuttx_systemtickhook.tmf" or self.template == "nuttx_timerhook.tmf":
+                txt +=  'os.environ["SHV_UPDATES_USED"] = \"' + str(self.SHV.updates) + '\"\n'
             fn.write(txt)
 
             fnm = './' + fname + '_gen'
