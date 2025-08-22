@@ -4,7 +4,7 @@ from supsisim.block import Block
 from supsisim.subsblock import subsBlock
 from supsisim.port import Port, InPort, OutPort
 from supsisim.connection import Connection
-from supsisim.dialg import RTgenDlg, SHVDlg
+from supsisim.dialg import RTgenDlg, SHVDlg, UpdimgDlg
 from supsisim.const import VERSION, pyrun, TEMP, respath, BWmin
 from supsisim.getTemplates import dictTemplates
 from supsisim.RCPblk import RcpParam
@@ -44,10 +44,16 @@ class SHVInstance:
         self.mount = 'test'
 
         self.tuned = False
+        self.updates = False
 
         self.tree = 'GAVL'
 
 class Scene(QGraphicsScene):
+    class UpdimgContext():
+        def __init__(self, met: str, openocd_params: str):
+            self.met = met
+            self.openocd_params = openocd_params
+
     def __init__(self, main, parent=None):
         super(Scene,self).__init__(parent)
         self.mainw = main
@@ -69,6 +75,7 @@ class Scene(QGraphicsScene):
         self.prio = ''
 
         self.SHV = SHVInstance(self.mainw.filename)
+        self.updimgCtx = self.UpdimgContext("openocd", "")
 
         self.brokerConnection = ShvClient()
 
@@ -360,6 +367,15 @@ class Scene(QGraphicsScene):
         dialog = SHVDlg(self)
         dialog.SHVused.setChecked(self.SHV.used)
         dialog.SHVtune.setChecked(self.SHV.tuned)
+
+        # REVISIT: only supported for NuttX
+        if self.template == "nuttx.tmf" or \
+           self.template == "nuttx_systemtickhook.tmf" or \
+           self.template == "nuttx_timerhook.tmf":
+            dialog.SHVUpdates.setChecked(self.SHV.updates)
+        else:
+            dialog.SHVUpdates.setEnabled(False)
+
         dialog.SHVip.setText(self.SHV.ip)
         dialog.SHVport.setText(self.SHV.port)
         dialog.SHVuser.setText(self.SHV.user)
@@ -383,6 +399,32 @@ class Scene(QGraphicsScene):
 
         if not self.SHV.tuned and self.brokerConnection is not None:
             self.brokerConnection.disconnect()
+
+    def updimgDlg(self):
+        # REVISIT: the update action is only supported for NuttX
+        if self.template != "nuttx_timerhook.tmf" and \
+           self.template != "nuttx_systemtickhook.tmf" and \
+           self.template != "nuttx.tmf":
+            return
+
+        dialog = UpdimgDlg(self)
+        dialog.upd_met_combo.addItem("openocd")
+        if self.SHV.updates == True:
+            dialog.upd_met_combo.addItem("SHV NXBoot Update")
+
+        # Reset the dialog's context
+        dialog.upd_met_combo.setCurrentIndex(0)
+        _idx = dialog.upd_met_combo.findText(self.updimgCtx.met)
+        if _idx >= 0:
+            dialog.upd_met_combo.setCurrentIndex(_idx)
+        dialog.openocd_params_edit.setText(self.updimgCtx.openocd_params)
+
+        res = dialog.exec()
+        if res != 1:
+            return
+
+        self.updimgCtx.met = dialog.upd_met_combo.currentText()
+        self.updimgCtx.openocd_params = dialog.openocd_params_edit.text()
 
     def findAllItems(self, scene):
         items = []

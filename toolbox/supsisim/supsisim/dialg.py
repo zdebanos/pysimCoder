@@ -178,6 +178,9 @@ class SHVDlg(QDialog):
         lab2 = QLabel('Enable tuning over SHV')
         self.SHVtune = QCheckBox('')
         self.SHVtune.setChecked(False)
+        lab_shvupdates = QLabel('Turn on SHV Image Updates')
+        self.SHVUpdates = QCheckBox('')
+        self.SHVUpdates.setChecked(False)
         lab3 = QLabel('SHV Broker IP')
         self.SHVip = QLineEdit('')
         lab4 = QLabel('SHV Broker Port')
@@ -203,23 +206,111 @@ class SHVDlg(QDialog):
         grid.addWidget(self.SHVused, 0, 1)
         grid.addWidget(lab2, 1, 0)
         grid.addWidget(self.SHVtune, 1, 1)
-        grid.addWidget(lab3, 2, 0)
-        grid.addWidget(self.SHVip, 2, 1)
-        grid.addWidget(lab4, 3, 0)
-        grid.addWidget(self.SHVport, 3, 1)
-        grid.addWidget(lab5, 4, 0)
-        grid.addWidget(self.SHVuser, 4, 1)
-        grid.addWidget(lab6, 5, 0)
-        grid.addWidget(self.SHVpassw, 5, 1)
-        grid.addWidget(lab7, 6, 0)
-        grid.addWidget(self.SHVdevid, 6, 1)
-        grid.addWidget(lab8, 7, 0)
-        grid.addWidget(self.SHVmount, 7, 1)
-        grid.addWidget(lab9, 8, 0)
-        grid.addWidget(self.SHVtree, 8, 1)
-        grid.addWidget(pbOK, 9, 0)
-        grid.addWidget(pbCANCEL, 9, 1)
+        grid.addWidget(lab_shvupdates, 2, 0)
+        grid.addWidget(self.SHVUpdates, 2, 1)
+        grid.addWidget(lab3, 3, 0)
+        grid.addWidget(self.SHVip, 3, 1)
+        grid.addWidget(lab4, 4, 0)
+        grid.addWidget(self.SHVport, 4, 1)
+        grid.addWidget(lab5, 5, 0)
+        grid.addWidget(self.SHVuser, 5, 1)
+        grid.addWidget(lab6, 6, 0)
+        grid.addWidget(self.SHVpassw, 6, 1)
+        grid.addWidget(lab7, 7, 0)
+        grid.addWidget(self.SHVdevid, 7, 1)
+        grid.addWidget(lab8, 8, 0)
+        grid.addWidget(self.SHVmount, 8, 1)
+        grid.addWidget(lab9, 9, 0)
+        grid.addWidget(self.SHVtree, 9, 1)
+        grid.addWidget(pbOK, 10, 0)
+        grid.addWidget(pbCANCEL, 10, 1)
         pbOK.clicked.connect(self.accept)
         pbCANCEL.clicked.connect(self.reject)
 
         self.setLayout(grid)
+
+class UpdimgDlg(QDialog):
+    def _on_upd_met_change(self, value):
+        en: bool = False
+        if value == "openocd":
+            en = True
+
+        self.openocd_params_lab.setEnabled(en)
+        self.openocd_params_edit.setEnabled(en)
+
+    def _on_start_upd_pushed(self):
+        pass
+
+    def _on_cancel_upd_pushed(self):
+        pass
+
+    def _on_help_pushed(self):
+        msg = QMessageBox()
+        msg.setIcon(QMessageBox.Icon.Question)
+        msg.setWindowTitle("Help")
+        msg.setText(
+            "Currently only supporting nuttx!!\n" +
+            "Update method: choose openocd or SHV NXBoot Update.\n" +
+            "When openocd is chosen, fill in the shell parameters.\n" +
+            "When SHV NXBoot Update is chosen, it is expected\n" +
+            "  1) you're running NuttX model with SHV turned on\n" +
+            "  2) the parameters in the SHV option are set correctly."
+        )
+        msg.setStandardButtons(QMessageBox.StandardButton.Ok)
+        msg.setFixedSize(msg.size())
+        msg.exec()
+
+    def __init__(self, parent=None):
+        super(UpdimgDlg, self).__init__(None)
+        self.setWindowModality(Qt.WindowModality.ApplicationModal)
+        self.resize(600, 500)
+
+        # Top layout
+        top_layout = QWidget(self)
+        grid_top = QGridLayout(top_layout)
+
+        # Bottom buttons layout
+        button_layout = QWidget(self)
+        grid_button = QGridLayout(button_layout)
+
+        # Main layout
+        main_layout = QVBoxLayout(self)
+
+        self.upd_met_lab = QLabel('Update method')
+        # Do not add any items to QComboBox - that will be filled in scene
+        self.upd_met_combo = QComboBox()
+        # To have responsive labels
+        self.upd_met_combo.currentTextChanged.connect(self._on_upd_met_change)
+        self.openocd_params_lab = QLabel('Openocd shell parameters')
+        self.openocd_params_edit = QLineEdit()
+
+        self.start_pb = QPushButton('Start Update')
+        self.cancel_pb = QPushButton('Cancel Update')
+        self.help_pb = QPushButton('Help')
+        self.help_pb.clicked.connect(self._on_help_pushed)
+
+        self.updinfo_box_lab = QLabel('Update procedure log')
+        self.updinfo_box = QTextEdit()
+
+        grid_top.addWidget(self.upd_met_lab, 0, 0)
+        grid_top.addWidget(self.upd_met_combo, 0, 1)
+        grid_top.addWidget(self.openocd_params_lab, 1, 0)
+        grid_top.addWidget(self.openocd_params_edit, 1, 1)
+
+        grid_button.addWidget(self.start_pb, 0, 0)
+        grid_button.addWidget(self.cancel_pb, 0, 1)
+        grid_button.addWidget(self.help_pb, 0, 2)
+
+        self.updinfo_box.setFixedHeight(300)
+        self.updinfo_box.setMinimumWidth(0)
+        button_layout.setFixedHeight(50)
+        button_layout.setMinimumWidth(0)
+        self.updinfo_box_lab.setFixedHeight(50)
+        self.updinfo_box_lab.setMinimumWidth(0)
+
+        main_layout.addWidget(top_layout, stretch=1)
+        main_layout.addWidget(self.updinfo_box_lab, stretch=0)
+        main_layout.addWidget(self.updinfo_box, stretch=0)
+        main_layout.addWidget(button_layout, stretch=0)
+
+        self.setLayout(main_layout)

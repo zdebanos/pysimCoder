@@ -21,12 +21,6 @@ class ShvTreeGenerator:
         self.blocks_ordered.sort()
 
     def generate_header(self) -> None:
-        if environ["SHV_USED"] == "True":
-            text: str = "#define CONF_SHV_USED 1\n\n"
-        else:
-            text = "#undef CONF_SHV_USED\n\n"
-        self.f.write(text)
-
         text = "#ifdef CONF_SHV_USED\n"
         text += "#include <shv/tree/shv_connection.h>\n"
         text += "#include <shv/tree/shv_tree.h>\n"
@@ -61,7 +55,7 @@ class ShvTreeGenerator:
                 + str(self.blocks_cnt)
                 + "];\n"
             )
-            text += "static shv_con_ctx_t *" + self.model + "_ctx;\n"
+            text += "static shv_con_ctx_t *" + self.model + "_shv_ctx;\n"
             text += "static struct shv_connection shv_conn;\n"
             text += "#endif /* CONF_SHV_USED */\n\n"
             self.f.write(text)
@@ -569,16 +563,25 @@ class ShvTreeGenerator:
         text += '  shv_conn.reconnect_period = 10;\n'
         text += '  shv_conn.reconnect_retries = 0;\n'
         text += '  shv_connection_tcpip_init(&shv_conn, "' + environ["SHV_BROKER_IP"] + \
-                '", ' + environ["SHV_BROKER_PORT"] + ');\n'
+                '", ' + environ["SHV_BROKER_PORT"] + ');\n\n'
+        text += '  /* Fill in the pysim_model_ctx struct. REVISIT: do it somewhere else */\n'
+        text += "  " + self.model + '_ctx.pt_arg = &' + self.model + '_pt_ctx;\n'
+        text += (
+            "  " + self.model + '_ctx.pt_ops.pausectrl = &' + self.model + '_pausectrl;\n' +
+            "  " + self.model + '_ctx.pt_ops.resumectrl = &' + self.model + '_resumectrl;\n' +
+            "  " + self.model + '_ctx.pt_ops.getctrlstate = &' + self.model + '_getctrlstate;\n'
+            "  " + self.model + '_ctx.pt_ops.comprio = &' + self.model + '_comprio;\n'
+        )
+        text += "  block_name_map_" + self.model + ".model_ctx = &" + self.model + "_ctx;\n"
         text += (
             "  "
             + self.model
-            + "_ctx = shv_tree_init(&block_name_map_"
+            + "_shv_ctx = shv_tree_init(&block_name_map_"
             + self.model
             + ", &shv_tree_root, CONF_SHV_TREE_TYPE, "
             + "&shv_conn, at_signlr);\n"
         )
-        text += "  if (" + self.model + "_ctx == NULL)\n"
+        text += "  if (" + self.model + "_shv_ctx == NULL)\n"
         text += "    return -1;\n"
         text += "  return 0;\n"
         text += "}\n"
@@ -678,18 +681,23 @@ class ShvTreeGenerator:
             + self.model
             + ".block_structure = block_"
             + self.model
-            + ";\n\n"
+            + ";\n"
+        )
+        text += (
+            "  block_name_map_"
+            + self.model
+            + ".model_ctx = &"
+            + self.model
+            + "_ctx;\n\n"
         )
         self.f.write(text)
-
-
         self.f.write("#endif /* CONF_SHV_USED */\n\n")
 
     def generate_end(self) -> None:
         text = "#ifdef CONF_SHV_USED\n"
         text += "void " + self.model + "_com_end(void)\n"
         text += "{\n"
-        text += "  shv_tree_end(" + self.model + "_ctx, CONF_SHV_TREE_TYPE);\n"
+        text += "  shv_tree_end(" + self.model + "_shv_ctx, CONF_SHV_TREE_TYPE);\n"
         text += "}\n"
         text += "#endif /* CONF_SHV_USED */\n\n"
         self.f.write(text)

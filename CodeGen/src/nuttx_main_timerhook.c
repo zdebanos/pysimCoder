@@ -45,8 +45,14 @@
 #include <nuttx/config.h>
 #include <nuttx/timers/timer.h>
 
+#include <semaphore.h>
+
 #ifdef HAVE_MLOCK
 #include <sys/mman.h>
+#endif
+
+#ifdef CONF_SHV_USED
+#include <shv/tree/shv_com.h>
 #endif
 
 /****************************************************************************
@@ -72,6 +78,10 @@ int NAME(MODEL, _init)(void);
 int NAME(MODEL, _isr)(double);
 int NAME(MODEL, _end)(void);
 double NAME(MODEL, _get_tsamp)(void);
+#ifdef CONF_SHV_USED
+int NAME(MODEL, _com_init)(shv_attention_signaller at_signlr);
+void NAME(MODEL, _com_end)(void);
+#endif
 
 static int timespec_diff_us(struct timespec t1, struct timespec t2);
 static void *benchmark_task(void *p);
@@ -79,6 +89,27 @@ static void *rt_task(void *p);
 static void proc_opt(int argc, char *argv[]);
 static void endme(int n);
 static void print_usage(void);
+#ifdef CONF_SHV_USED
+static void shv_my_at_signlr(shv_con_ctx_t *ctx, enum shv_attention_reason r);
+#endif
+
+/* Platform dependant model context, use this to store parameters. */
+
+struct pysim_platform_model_ctx
+{
+  sem_t pause_barrier;
+  volatile int ctrlloopend;
+  int running_state;
+};
+
+/* REVISIT: a global instance is created, for showcase purposes.
+ * The idea is to rewrite this in future so there are no global variables,
+ * to make running of multiple models possible.
+ *
+ * REVISIT: Create a function for each platform that creates the model's
+ *          instance.
+ */
+struct pysim_platform_model_ctx NAME(MODEL, _pt_ctx);
 
 /****************************************************************************
  * Private Data
@@ -143,6 +174,12 @@ static void *benchmark_task(void *p)
   return NULL;
 }
 
+#ifdef CONF_SHV_USED
+static void shv_my_at_signlr(shv_con_ctx_t *ctx, enum shv_attention_reason r)
+{
+}
+#endif
+
 static void *rt_task(void *p)
 {
   int ret;
@@ -163,7 +200,11 @@ static void *rt_task(void *p)
   struct timespec starttime;
   struct timespec T0;
   pthread_t bench_thrd;
+#ifdef CONF_SHV_USED
+  bool com_inited = false;
+#endif
 
+  struct pysim_platform_model_ctx *mctx = (struct pysim_platform_model_ctx*) p;
   time_counter = 0;
 
   /* initialize sigevent, SIGEV_NONE is sufficient */
@@ -186,168 +227,196 @@ static void *rt_task(void *p)
       exit(-1);
     }
 
-  timerfd = open(TIMER_DEV, O_RDWR);
-  if (timerfd < 0)
-    {
-      perror("timer open");
-      exit(-1);
-    }
-
-  /* prepare for poll */
-
-  fds[0].fd = timerfd;
-  fds[0].events = POLLIN;
-
-#ifdef HAVE_MLOCK
-  mlockall(MCL_CURRENT | MCL_FUTURE);
-#endif
-
-  sampling_period = NAME(MODEL, _get_tsamp)();
-  req_timeout = (uint32_t) (sampling_period * USEC_PER_SEC);
-
-  ret = ioctl(timerfd, TCIOC_MAXTIMEOUT,
-              (unsigned long)((uintptr_t) &maxtimeout));
-  if (ret < 0)
-    {
-      perror("timer maxtimeout");
-      exit(-1);
-    }
-
-  if (req_timeout > maxtimeout)
-    {
-      printf("Can't set such sampling period (maximum = %lu)\n", maxtimeout);
-      exit(-1);
-    }
-
-  ret = ioctl(timerfd, TCIOC_SETTIMEOUT, (unsigned long)req_timeout);
-  if (ret < 0)
-    {
-      perror("timer settimeout");
-      exit(-1);
-    }
-
-  ret = ioctl(timerfd, TCIOC_NOTIFICATION,
-              (unsigned long)((uintptr_t) &notify));
-  if (ret < 0)
-    {
-      perror("notify timer");
-      exit(-1);
-    }
-
-  /* start the benchmark logger, if needed */
-
-  if (benchmark)
-    {
-      pthread_create(&bench_thrd, NULL, benchmark_task, NULL);
-    }
-
-  NAME(MODEL, _init)();
-
-  /* Wait for connections a bit (so the first samples are not delayed) */
-
-  usleep(1000 * 1000);
-
-#ifdef CANOPEN
-  canopen_synch();
-#endif
-
-  /* start the loop */
-
-  ret = ioctl(timerfd, TCIOC_START);
-  if (ret < 0)
-    {
-      perror("timer start");
-      exit(-1);
-    }
-
-  /* Save the start time */
-
-  clock_gettime(CLOCK_MONOTONIC, &starttime);
-  T = 0;
-  T0 = starttime;
-  maxlat1 = maxlat2 = 0;
-  loops = 0;
+  /* Thread creation routines end */
 
   while (!end)
     {
-      clock_gettime(CLOCK_MONOTONIC, &curtime);
-      T = timespec_diff_s(curtime, T0);
-      if (final_time > 0 && T >= final_time)
+      timerfd = open(TIMER_DEV, O_RDWR);
+      if (timerfd < 0)
         {
-          break;
+          perror("timer open");
+          exit(-1);
         }
 
-      ret = poll(fds, 1, -1);
+      /* prepare for poll */
+
+      fds[0].fd = timerfd;
+      fds[0].events = POLLIN;
+
+#ifdef HAVE_MLOCK
+      mlockall(MCL_CURRENT | MCL_FUTURE);
+#endif
+
+      sampling_period = NAME(MODEL, _get_tsamp)();
+      req_timeout = (uint32_t) (sampling_period * USEC_PER_SEC);
+
+      ret = ioctl(timerfd, TCIOC_MAXTIMEOUT,
+                  (unsigned long)((uintptr_t) &maxtimeout));
       if (ret < 0)
         {
-          perror("poll timer");
-          break;
+          perror("timer maxtimeout");
+          exit(-1);
         }
+
+      if (req_timeout > maxtimeout)
+        {
+          printf("Can't set such sampling period (maximum = %lu)\n", maxtimeout);
+          exit(-1);
+        }
+
+      ret = ioctl(timerfd, TCIOC_SETTIMEOUT, (unsigned long)req_timeout);
+      if (ret < 0)
+        {
+          perror("timer settimeout");
+          exit(-1);
+        }
+
+      ret = ioctl(timerfd, TCIOC_NOTIFICATION,
+                  (unsigned long)((uintptr_t) &notify));
+      if (ret < 0)
+        {
+          perror("notify timer");
+          exit(-1);
+        }
+
+      /* start the benchmark logger, if needed */
+
       if (benchmark)
         {
-          loops += 1;
-          ret = ioctl(timerfd, TCIOC_GETSTATUS,
-                      (unsigned long)((uintptr_t) &tstatus));
-          if (ret < 0)
-            {
-              perror("timer getstatus");
-              exit(-1);
-            }
-          lat = tstatus.timeout - tstatus.timeleft;
-          if (lat > maxlat1)
-            {
-              maxlat1 = lat;
-            }
+          pthread_create(&bench_thrd, NULL, benchmark_task, NULL);
         }
 
-      /* periodic task */
 
-      NAME(MODEL, _isr)(T);
-
-      if (benchmark)
+      NAME(MODEL, _init)();
+#ifdef CONF_SHV_USED
+      if (!com_inited)
         {
-          ret = ioctl(timerfd, TCIOC_GETSTATUS,
-                      (unsigned long)((uintptr_t) &tstatus));
-          if (ret < 0)
-            {
-              perror("timer getstatus");
-              exit(-1);
-            }
-          lat = tstatus.timeout - tstatus.timeleft;
-          if (lat > maxlat2)
-            {
-              maxlat2 = lat;
-            }
-
-          clock_gettime(CLOCK_MONOTONIC, &curtime);
-          if (timespec_diff_us(curtime, starttime) >= USEC_PER_SEC)
-            {
-              nloops = loops;
-              maxlat_wakeup = maxlat1;
-              maxlat_afterisr = maxlat2;
-              loops = 0;
-              maxlat1 = 0;
-              maxlat2 = 0;
-              starttime = curtime;
-            }
+          NAME(MODEL, _com_init)(shv_my_at_signlr);
         }
+#endif
 
-      time_counter += 1;
+      /* Wait for connections a bit (so the first samples are not delayed) */
+
+      usleep(1000 * 1000);
 
 #ifdef CANOPEN
-          canopen_synch();
+      canopen_synch();
 #endif
-    }
 
-  ret = ioctl(timerfd, TCIOC_STOP);
-  if (ret < 0)
+      /* start the loop */
+
+      ret = ioctl(timerfd, TCIOC_START);
+      if (ret < 0)
+        {
+          perror("timer start");
+          exit(-1);
+        }
+
+      /* Save the start time */
+
+      clock_gettime(CLOCK_MONOTONIC, &starttime);
+      T = 0;
+      T0 = starttime;
+      maxlat1 = maxlat2 = 0;
+      loops = 0;
+
+      /* The loop now starts */
+
+      mctx->running_state = 1;
+
+      while (!mctx->ctrlloopend)
+        {
+          clock_gettime(CLOCK_MONOTONIC, &curtime);
+          T = timespec_diff_s(curtime, T0);
+          if (final_time > 0 && T >= final_time)
+            {
+              break;
+            }
+
+          ret = poll(fds, 1, -1);
+          if (ret < 0)
+            {
+              perror("poll timer");
+              break;
+            }
+          if (benchmark)
+            {
+              loops += 1;
+              ret = ioctl(timerfd, TCIOC_GETSTATUS,
+                          (unsigned long)((uintptr_t) &tstatus));
+              if (ret < 0)
+                {
+                  perror("timer getstatus");
+                  exit(-1);
+                }
+              lat = tstatus.timeout - tstatus.timeleft;
+              if (lat > maxlat1)
+                {
+                  maxlat1 = lat;
+                }
+            }
+
+          /* periodic task */
+
+          NAME(MODEL, _isr)(T);
+
+          if (benchmark)
+            {
+              ret = ioctl(timerfd, TCIOC_GETSTATUS,
+                          (unsigned long)((uintptr_t) &tstatus));
+              if (ret < 0)
+                {
+                  perror("timer getstatus");
+                  exit(-1);
+                }
+              lat = tstatus.timeout - tstatus.timeleft;
+              if (lat > maxlat2)
+                {
+                  maxlat2 = lat;
+                }
+
+              clock_gettime(CLOCK_MONOTONIC, &curtime);
+              if (timespec_diff_us(curtime, starttime) >= USEC_PER_SEC)
+                {
+                  nloops = loops;
+                  maxlat_wakeup = maxlat1;
+                  maxlat_afterisr = maxlat2;
+                  loops = 0;
+                  maxlat1 = 0;
+                  maxlat2 = 0;
+                  starttime = curtime;
+                }
+            }
+
+          time_counter += 1;
+
+#ifdef CANOPEN
+              canopen_synch();
+#endif
+        }
+
+      ret = ioctl(timerfd, TCIOC_STOP);
+      if (ret < 0)
+        {
+          perror("timer stop");
+          exit(-1);
+        }
+
+      NAME(MODEL, _end)();
+      close(timerfd);
+
+      if (end)
+        {
+          break;
+        }
+      sem_wait(&mctx->pause_barrier);
+    }
+#ifdef CONF_SHV_USED
+  if (com_inited)
     {
-      perror("timer stop");
-      exit(-1);
+      NAME(MODEL, _com_end)();
     }
-
-  NAME(MODEL, _end)();
-  close(timerfd);
+#endif
   if (benchmark)
     {
       pthread_join(bench_thrd, NULL);
@@ -358,6 +427,7 @@ static void *rt_task(void *p)
 static void endme(int n)
 {
   end = 1;
+  NAME(MODEL, _pt_ctx).ctrlloopend = 1;
 }
 
 static void print_usage(void)
@@ -371,7 +441,7 @@ static void print_usage(void)
     "  -v  verbose output\n"
     "  -p <priority>  set rt task priority (default 99)\n"
     "  -b  model timing benchmark, each second the number of model\n"
-    "      execution is printed, alongside worst case latencies"
+    "      execution is printed, alongside worst case latencies\n"
     "  -e  external clock\n"
     "  -w  wait to start\n"
     "  -V  print version\n"
@@ -412,17 +482,8 @@ static void proc_opt(int argc, char *argv[])
 }
 
 /****************************************************************************
- * Name: get_run_time
- *
- * Description:
- *   Get current run time.
- *
+ * Public Functions
  ****************************************************************************/
-
-double get_run_time()
-{
-  return time_counter * sampling_period;
-}
 
 /****************************************************************************
  * Name: get_Tsamp
@@ -437,15 +498,16 @@ double get_Tsamp()
   return sampling_period;
 }
 
-/****************************************************************************
- * Name: get_Tsamp
- *
- * Description:
- *   Get priority for a communication task
- *
- ****************************************************************************/
+/* Staging change only, for now. void* arg used for future purposes,
+ * to get rid of global variables and to be generic
+ */
 
-int get_priority_for_com(void)
+double NAME(MODEL, _runtime)(struct pysim_platform_model_ctx *ctx)
+{
+  return time_counter * sampling_period;
+}
+
+int NAME(MODEL, _comprio)(struct pysim_platform_model_ctx *ctx)
 {
   if (prio < 0)
     {
@@ -457,22 +519,37 @@ int get_priority_for_com(void)
     }
 }
 
-/****************************************************************************
- * Public Functions
- ****************************************************************************/
+void NAME(MODEL, _pausectrl)(struct pysim_platform_model_ctx *ctx)
+{
+  ctx->ctrlloopend = 1;
+}
+
+void NAME(MODEL, _resumectrl)(struct pysim_platform_model_ctx *ctx)
+{
+  ctx->ctrlloopend = 0;
+  sem_post(&ctx->pause_barrier);
+}
+
+int NAME(MODEL, _getctrlstate)(struct pysim_platform_model_ctx *ctx)
+{
+  return ctx->running_state;
+}
 
 int main(int argc, char** argv)
 {
   pthread_t thrd;
-  int fd;
+
+  /* Initialize the context variables */
+
+  sem_init(&NAME(MODEL, _pt_ctx).pause_barrier, 0, 0);
+  NAME(MODEL, _pt_ctx).ctrlloopend = 0;
+  NAME(MODEL, _pt_ctx).running_state = 0;
 
   proc_opt(argc, argv);
-
   signal(SIGINT, endme);
   signal(SIGKILL, endme);
 
-  pthread_create(&thrd, NULL, rt_task, NULL);
-
+  pthread_create(&thrd, NULL, rt_task, &NAME(MODEL, _pt_ctx));
   pthread_join(thrd, NULL);
   return 0;
 }

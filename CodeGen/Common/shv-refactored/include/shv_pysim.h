@@ -9,13 +9,23 @@
 #include <shv/tree/shv_tree.h>
 #include <shv/tree/shv_connection.h>
 #include <shv/tree/shv_com.h>
+#include <pyblock.h>
 
-extern const shv_dmap_t shv_blk_dmap;
+typedef struct shv_node_model_ctx {
+  shv_node_t shv_node;               /* Node instance */
+  struct pysim_model_ctx *model_ctx; /* A pointer to the model's context, needed for interaction */
+} shv_node_model_ctx_t;
+
+struct shv_node_model_ctx *shv_node_model_ctx_new(const char *child_name,
+                                                  const shv_dmap_t *dir,
+                                                  int mode);
 
 shv_con_ctx_t *shv_tree_init(python_block_name_map * block_map,
                              const shv_node_t *static_root, int mode,
                              struct shv_connection *conn,
                              shv_attention_signaller at_signlr);
 void shv_tree_end(shv_con_ctx_t *ctx, int mode);
+
+extern const shv_dmap_t shv_blk_dmap;
 
 #endif /* SHV_PYSIM_H */

@@ -25,9 +25,12 @@
 #include <shv/tree/shv_tree.h>
 #include <shv/tree/shv_connection.h>
 #include <shv/tree/shv_methods.h>
+#include <shv/tree/shv_file_com.h>
 #include <ulut/ul_utdefs.h>
 
 #include <shv_pysim.h>
+#include <shv_manager_node.h>
+#include <shv_fwupdate_node.h>
 
 static const shv_method_des_t * const shv_blk_dmap_items[] = {
   &shv_dmap_item_dir,
@@ -220,6 +223,8 @@ static void shv_tree_create(python_block_name_map * block_map,
   shv_node_t *item_in;
   shv_node_t *item_out;
   shv_node_t *item_blocks;
+  struct shv_node_model_ctx *item_manager;
+  shv_file_node_t *item_fwupdate;
 
   /* Initialization of tree root */
 
@@ -264,6 +269,24 @@ static void shv_tree_create(python_block_name_map * block_map,
     }
 
   shv_tree_add_child(shv_tree_root, item_blocks);
+
+  /* Create the manager node, to manage the behaviour of the model */
+
+  item_manager = shv_node_model_ctx_new("manager", &shv_manager_dmap, mode);
+  if (item_manager == NULL)
+    {
+      printf("ERROR: Failed to allocate memory for SHV tree block \"blocks\"!");
+      return;
+    }
+
+  item_manager->model_ctx = block_map->model_ctx;
+  shv_tree_add_child(shv_tree_root, &item_manager->shv_node);
+
+  item_fwupdate = shv_tree_file_node_new("fwupdate", &shv_fwupdate_dmap, mode);
+  if (item_fwupdate == NULL)
+    {
+      printf("");
+    }
 
   /* For each block */
 
@@ -324,6 +347,19 @@ static void shv_tree_create(python_block_name_map * block_map,
     }
 }
 
+struct shv_node_model_ctx *shv_node_model_ctx_new(const char *child_name,
+                                                  const shv_dmap_t *dir,
+                                                  int mode)
+{
+    struct shv_node_model_ctx *item = malloc(sizeof(struct shv_node_model_ctx));
+    if (item == NULL) {
+        return NULL;
+    }
+    memset(item, 0, sizeof(struct shv_node_model_ctx));
+    shv_tree_node_init(&item->shv_node, child_name, dir, mode);
+    return item;
+}
+
 /****************************************************************************
  * Name: shv_tree_init
  *
@@ -339,6 +375,16 @@ shv_con_ctx_t *shv_tree_init(python_block_name_map * block_map,
                              shv_attention_signaller at_signlr)
 {
   const shv_node_t *root;
+  int comprio;
+  int ret;
+
+  /* There's no function to determine the priority */
+
+  if (!block_map->model_ctx->pt_ops.comprio)
+    {
+      return NULL;
+    }
+  comprio = block_map->model_ctx->pt_ops.comprio(block_map->model_ctx->pt_arg);
 
   if ((mode & SHV_NLIST_MODE_STATIC) == 0)
     {
@@ -363,6 +409,12 @@ shv_con_ctx_t *shv_tree_init(python_block_name_map * block_map,
   if (ctx == NULL)
     {
       printf("ERROR: shv_init() failed.\n");
+    }
+
+  ret = shv_create_process_thread(comprio, ctx);
+  if (ret < 0)
+    {
+      printf("ERROR: %s\n", shv_errno_str(ctx));
     }
 
   return ctx;
