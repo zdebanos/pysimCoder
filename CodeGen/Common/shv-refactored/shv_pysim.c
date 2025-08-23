@@ -224,7 +224,6 @@ static void shv_tree_create(python_block_name_map * block_map,
   shv_node_t *item_out;
   shv_node_t *item_blocks;
   struct shv_node_model_ctx *item_manager;
-  shv_file_node_t *item_fwupdate;
 
   /* Initialization of tree root */
 
@@ -282,11 +281,7 @@ static void shv_tree_create(python_block_name_map * block_map,
   item_manager->model_ctx = block_map->model_ctx;
   shv_tree_add_child(shv_tree_root, &item_manager->shv_node);
 
-  item_fwupdate = shv_tree_file_node_new("fwupdate", &shv_fwupdate_dmap, mode);
-  if (item_fwupdate == NULL)
-    {
-      printf("");
-    }
+  /* Do not allocate the update node. The generated code will take care of this. */
 
   /* For each block */
 

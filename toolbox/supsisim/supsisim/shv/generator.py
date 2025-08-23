@@ -28,6 +28,8 @@ class ShvTreeGenerator:
         text += "#include <shv/tree/shv_com.h>\n"
         text += "#include <ulut/ul_utdefs.h>\n\n"
         text += "#include \"shv_pysim.h\"\n"
+        text += '#include "shv_fwupdate_node.h"\n'
+        text += '#include "shv_manager_node.h"\n'
         self.f.write(text)
 
         if environ["SHV_TREE_TYPE"] == "GSA":
@@ -43,11 +45,30 @@ class ShvTreeGenerator:
         text += "#endif /* CONF_SHV_USED */\n\n"
         self.f.write(text)
 
+        # It gets a bit complicated, due to the file update node.
+        # As the main should provide the shv_init_fwupdate function due to platform differences,
+        # we expect the fwupdate node to be dynamic, regardless of the whole tree type.
+        # Thus in case of fwupdate and GSA being used, the whole tree is built
+        # as const rodata, but the file node is always built and initialized dynamically.
+        # So we need to modifier to determine whether the root is const or not.
+
         if environ["SHV_USED"] == "True":
             self.f.write("/* SHV related function and structures */\n\n")
             self.f.write("#ifdef CONF_SHV_USED\n")
+            text = "#ifdef CONF_SHV_UPDATES_USED\n"
+            text += "#define ROOT_NODE_CONST\n"
+            text += "#else\n"
+            text += "#define ROOT_NODE_CONST const\n"
+            text += "#endif /* CONF_SHV_UPDATES_USED */\n\n"
+            self.f.write(text)
 
-            text = "python_block_name_map block_name_map_" + self.model + ";\n"
+            text = "/********** SHV Function Declarations **********/\n"
+            text += "int shv_init_fwupdate(struct pysim_platform_model_ctx *ctx, shv_file_node_t *item);\n"
+            text += "\n"
+            self.f.write(text)
+
+            text = "/********** SHV Private Data **********/\n"
+            text += "python_block_name_map block_name_map_" + self.model + ";\n"
             text += (
                 "python_block_name_entry block_name_entry_"
                 + self.model
@@ -526,15 +547,38 @@ class ShvTreeGenerator:
         self.f.write(text)
 
         text = (
+            "const shv_node_model_ctx_t shv_node_manager = {\n" +
+            "    .shv_node = {\n" +
+            '        .name = "manager",\n'
+            "        .dir = UL_CAST_UNQ1(shv_dmap_t *, &shv_manager_dmap),\n" +
+            "        .children = { .mode = CONF_SHV_TREE_TYPE }\n" +
+            "    },\n" +
+            "    .model_ctx = &" + self.model + "_ctx\n" +
+            "};\n\n"
+        )
+        self.f.write(text)
+        text = (
+            "const shv_file_node_t shv_node_fwupdate = {\n" +
+            "    .shv_node = {\n" +
+            '        .name = "fwupdate",\n'
+            "        .dir = UL_CAST_UNQ1(shv_dmap_t *, &shv_fwupdate_dmap),\n" +
+            "        .children = { .mode = CONF_SHV_TREE_TYPE }\n" +
+            "    },\n" +
+            "    .model_ctx = &" + self.model + "_ctx\n" +
+            "};\n\n"
+        )
+
+        text = (
             "const shv_node_t *const shv_tree_root_items[] = {\n"
             + "  &shv_node_blks,\n"
             + "  &shv_node_inputs,\n"
+            + "  &shv_node_manager.shv_node,\n"
             + "  &shv_node_outputs,\n};\n\n"
         )
         self.f.write(text)
 
         text = (
-            "const shv_node_t shv_tree_root = {\n"
+            "ROOT_NODE_CONST shv_node_t shv_tree_root = {\n"
             + "   .dir = UL_CAST_UNQ1(shv_dmap_t *, &shv_root_dmap),\n"
             + "   .children = {.mode = CONF_SHV_TREE_TYPE,\n"
             + "                .list = {.gsa = {.root = {\n"
@@ -578,11 +622,21 @@ class ShvTreeGenerator:
             + self.model
             + "_shv_ctx = shv_tree_init(&block_name_map_"
             + self.model
-            + ", &shv_tree_root, CONF_SHV_TREE_TYPE, "
+            + ", (const shv_node_t *) &shv_tree_root, CONF_SHV_TREE_TYPE, "
             + "&shv_conn, at_signlr);\n"
         )
         text += "  if (" + self.model + "_shv_ctx == NULL)\n"
         text += "    return -1;\n"
+        # Generate the update node dynamically, regardless of the tree type.
+        # The reason is that in certain scenarios, there's no API to get
+        # the params as const.
+        text += "#ifdef CONF_SHV_UPDATES_USED\n"
+        text += '  shv_file_node_t *shv_fwupdate_node = shv_tree_file_node_new("fwupdate", &shv_fwupdate_dmap, CONF_SHV_TREE_TYPE);\n'
+        text += "  if (shv_fwupdate_node" + " == NULL)\n"
+        text += "    return -1;\n"
+        text += "  shv_init_fwupdate(&" + self.model + "_pt_ctx, shv_fwupdate_node);\n"
+        text += "  shv_tree_add_child((const shv_node_t*) &shv_tree_root, &shv_fwupdate_node->shv_node);\n"
+        text += "#endif /* CONF_SHV_UPDATES_USED */\n"
         text += "  return 0;\n"
         text += "}\n"
         text += "#endif /* CONF_SHV_USED */\n\n"

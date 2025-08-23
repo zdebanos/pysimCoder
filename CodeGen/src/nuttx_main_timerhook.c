@@ -53,6 +53,15 @@
 
 #ifdef CONF_SHV_USED
 #include <shv/tree/shv_com.h>
+#include <shv/tree/shv_tree.h>
+#ifdef CONF_SHV_UPDATES_USED
+#include <nxboot.h>
+#include <nuttx/mtd/mtd.h>
+#include <sys/boardctl.h>
+#include <unistd.h>
+#include <shv/tree/shv_file_com.h>
+#include <shv/tree/shv_clayer_posix.h> /* For the file node override */
+#endif
 #endif
 
 /****************************************************************************
@@ -534,6 +543,57 @@ int NAME(MODEL, _getctrlstate)(struct pysim_platform_model_ctx *ctx)
 {
   return ctx->running_state;
 }
+
+#if defined(CONF_SHV_USED) && defined(CONF_SHV_UPDATES_USED)
+static int _shv_nxboot_opener(shv_file_node_t *item)
+{
+  struct shv_file_node_fctx *fctx = (struct shv_file_node_fctx*) item->fctx;
+  fctx->fd = nxboot_open_update_partition();
+  if (fctx->fd < 0)
+    {
+      return -1;
+    }
+  fctx->flags |= SHV_FILE_POSIX_BITFLAG_OPENED;
+  return 0;
+}
+
+/* This function provides the default initialization of the update file node
+ * for NuttX and allows for NXBoot integration.
+ */
+int shv_init_fwupdate(struct pysim_platform_model_ctx *ctx,
+                       shv_file_node_t *file_node)
+{
+  if (ctx == NULL || file_node == NULL)
+    {
+      return -1;
+    }
+
+  /* Default to NXBoot if we have it defined */
+
+#ifdef CONFIG_BOOT_NXBOOT
+  struct mtd_geometry_s geometry;
+  int flash_fd = nxboot_open_update_partition();
+  if (flash_fd < 0)
+    {
+      return -1;
+    }
+  if (ioctl(flash_fd, MTDIOC_GEOMETRY,
+            (unsigned long)((uintptr_t)&geometry)) < 0)
+    {
+      close(flash_fd);
+      return -1;
+    }
+
+  file_node->file_type = REGULAR;
+  file_node->file_maxsize = geometry.erasesize * geometry.neraseblocks;
+  file_node->file_pagesize = geometry.blocksize;
+
+  file_node->fops.opener = _shv_nxboot_opener;
+#endif
+
+  return 0;
+}
+#endif
 
 int main(int argc, char** argv)
 {

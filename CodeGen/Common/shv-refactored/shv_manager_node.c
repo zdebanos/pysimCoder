@@ -89,7 +89,9 @@ static const shv_method_des_t shv_dmap_item_getctrlstate =
 
 static const shv_method_des_t * const shv_manager_dmap_items[] =
 {
+  &shv_dmap_item_dir,
   &shv_dmap_item_getctrlstate,
+  &shv_dmap_item_ls,
   &shv_dmap_item_pausectrl,
   &shv_dmap_item_resumectrl
 };
