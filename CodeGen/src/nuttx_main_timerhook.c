@@ -507,8 +507,14 @@ double get_Tsamp()
   return sampling_period;
 }
 
-/* Staging change only, for now. void* arg used for future purposes,
- * to get rid of global variables and to be generic
+double get_run_time()
+{
+  return time_counter * sampling_period;
+}
+
+
+/* Staging change only, for now. The passed pointer is to be used
+ * for future purposes, to get rid of global variables and to be generic.
  */
 
 double NAME(MODEL, _runtime)(struct pysim_platform_model_ctx *ctx)
