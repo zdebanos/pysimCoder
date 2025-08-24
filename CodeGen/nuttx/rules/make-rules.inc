@@ -18,6 +18,12 @@ FILES_TO_CLEAN = *.o $(MODEL) $(MODEL).elf $(MAIN)-builtintab.c
 
 MODEL_BINARIES := ../$(MODEL).bin ../$(MODEL)
 
+ifneq ($(wildcard $(NUTTX_EXPORT)/tools/nximage.py),)
+NXIMAGE=$(NUTTX_EXPORT)/tools/nximage.py
+NXIMAGE_FILE=../$(MODEL).nximg
+MODEL_BINARIES += $(NXIMAGE_FILE)
+endif
+
 ifndef NUTTX_EXPORT
 $(warning Specify NUTTX_EXPORT)
 $(warning make_rtw NUTTX_EXPORT=/path/to/nuttx-export)
@@ -195,6 +201,13 @@ $(MAIN).c: $(MAINDIR)/$(MAIN).c $(MODEL).c
 ../$(MODEL).bin : ../$(MODEL)
 	@echo "OBJCOPY: $(MODEL).bin"
 	@$(OBJCOPY) $(OBJCOPYARGS) -O binary $< $@
+
+ifneq ($(NXIMAGE),)
+$(NXIMAGE_FILE) : ../$(MODEL).bin
+	@echo "GENERATING NXBoot Image"
+	@$(NXIMAGE) --header_size=0x200 --identifier=0 \
+	    --version=0.0.1 $< $@
+endif
 
 clean:
 	@$(RM) $(FILES_TO_CLEAN)
