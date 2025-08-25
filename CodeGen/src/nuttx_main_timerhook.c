@@ -46,6 +46,7 @@
 #include <nuttx/timers/timer.h>
 
 #include <semaphore.h>
+#include <pyblock.h>
 
 #ifdef HAVE_MLOCK
 #include <sys/mman.h>
@@ -106,9 +107,16 @@ static void shv_my_at_signlr(shv_con_ctx_t *ctx, enum shv_attention_reason r);
 
 struct pysim_platform_model_ctx
 {
-  sem_t pause_barrier;
-  volatile int ctrlloopend;
-  int running_state;
+  sem_t pause_barrier;           /* To pause the loop */
+  volatile int ctrlloopend;      /* Signal to stop the loop */
+  int running_state;             /* Running state, use to get */
+  bool com_inited;               /* SHV running, no need to initialize again */
+
+  /* Benchmark stats */
+
+  volatile int nloops;           /* The number of loops ran by ctrlloop */
+  volatile int maxlat_wakeup;    /* Maximum latency after the timer poll */
+  volatile int maxlat_afterisr;  /* Maximum latency after the model computation */
 };
 
 /* REVISIT: a global instance is created, for showcase purposes.
@@ -139,12 +147,6 @@ static int extclock = 0;
 static int benchmark = 0;
 static double final_time = 0.0;
 
-/* For RT task benchmark */
-
-volatile static int nloops = 0;
-volatile static int maxlat_wakeup = 0;
-volatile static int maxlat_afterisr = 0;
-
 #ifdef CANOPEN
 void canopen_synch(void);
 #endif
@@ -167,7 +169,9 @@ static double timespec_diff_s(struct timespec t1, struct timespec t2)
 
 static void *benchmark_task(void *p)
 {
-  /* set the priority of the task to a low level */
+  struct pysim_platform_model_ctx *mctx = (struct pysim_platform_model_ctx*) p;
+
+  /* Set the priority of the task to a low level */
 
   struct sched_param param;
   param.sched_priority = LOW_PRIORITY;
@@ -177,7 +181,7 @@ static void *benchmark_task(void *p)
     {
       usleep(1000 * 1000);
       printf("Nloops: %d, maxlat_wakeup: %d, maxlat_afterisr: %d\n",
-             nloops, maxlat_wakeup, maxlat_afterisr);
+             mctx->nloops, mctx->maxlat_wakeup, mctx->maxlat_afterisr);
     }
 
   return NULL;
@@ -209,12 +213,10 @@ static void *rt_task(void *p)
   struct timespec starttime;
   struct timespec T0;
   pthread_t bench_thrd;
-#ifdef CONF_SHV_USED
-  bool com_inited = false;
-#endif
 
   struct pysim_platform_model_ctx *mctx = (struct pysim_platform_model_ctx*) p;
   time_counter = 0;
+  mctx->com_inited = false;
 
   /* initialize sigevent, SIGEV_NONE is sufficient */
 
@@ -234,6 +236,13 @@ static void *rt_task(void *p)
     {
       perror("sched_setscheduler failed");
       exit(-1);
+    }
+
+  /* Start the benchmark logger here, if needed */
+
+  if (benchmark)
+    {
+      pthread_create(&bench_thrd, NULL, benchmark_task, p);
     }
 
   /* Thread creation routines end */
@@ -288,19 +297,15 @@ static void *rt_task(void *p)
           exit(-1);
         }
 
-      /* start the benchmark logger, if needed */
-
-      if (benchmark)
-        {
-          pthread_create(&bench_thrd, NULL, benchmark_task, NULL);
-        }
-
 
       NAME(MODEL, _init)();
 #ifdef CONF_SHV_USED
-      if (!com_inited)
+      if (!mctx->com_inited)
         {
-          NAME(MODEL, _com_init)(shv_my_at_signlr);
+          if (NAME(MODEL, _com_init)(shv_my_at_signlr) == 0)
+            {
+              mctx->com_inited = true;
+            }
         }
 #endif
 
@@ -332,7 +337,7 @@ static void *rt_task(void *p)
       /* The loop now starts */
 
       mctx->running_state = 1;
-
+      puts("CTRLLOOP START");
       while (!mctx->ctrlloopend)
         {
           clock_gettime(CLOCK_MONOTONIC, &curtime);
@@ -387,9 +392,9 @@ static void *rt_task(void *p)
               clock_gettime(CLOCK_MONOTONIC, &curtime);
               if (timespec_diff_us(curtime, starttime) >= USEC_PER_SEC)
                 {
-                  nloops = loops;
-                  maxlat_wakeup = maxlat1;
-                  maxlat_afterisr = maxlat2;
+                  mctx->nloops = loops;
+                  mctx->maxlat_wakeup = maxlat1;
+                  mctx->maxlat_afterisr = maxlat2;
                   loops = 0;
                   maxlat1 = 0;
                   maxlat2 = 0;
@@ -414,14 +419,22 @@ static void *rt_task(void *p)
       NAME(MODEL, _end)();
       close(timerfd);
 
+      /* Restore mctx state */
+
+      mctx->running_state = 0;
+      mctx->nloops = 0;
+      mctx->maxlat_wakeup = 0;
+      mctx->maxlat_afterisr = 0;
+
       if (end)
         {
           break;
         }
       sem_wait(&mctx->pause_barrier);
+      puts("CTRLLOOP resumed");
     }
 #ifdef CONF_SHV_USED
-  if (com_inited)
+  if (mctx->com_inited)
     {
       NAME(MODEL, _com_end)();
     }
@@ -537,10 +550,12 @@ int NAME(MODEL, _comprio)(struct pysim_platform_model_ctx *ctx)
 void NAME(MODEL, _pausectrl)(struct pysim_platform_model_ctx *ctx)
 {
   ctx->ctrlloopend = 1;
+  puts("PAUSING CTRLLOOP");
 }
 
 void NAME(MODEL, _resumectrl)(struct pysim_platform_model_ctx *ctx)
 {
+  puts("RESUMING CTRLLOOP");
   ctx->ctrlloopend = 0;
   sem_post(&ctx->pause_barrier);
 }
@@ -554,12 +569,15 @@ int NAME(MODEL, _getctrlstate)(struct pysim_platform_model_ctx *ctx)
 static int _shv_nxboot_opener(shv_file_node_t *item)
 {
   struct shv_file_node_fctx *fctx = (struct shv_file_node_fctx*) item->fctx;
-  fctx->fd = nxboot_open_update_partition();
-  if (fctx->fd < 0)
+  if (!(fctx->flags & SHV_FILE_POSIX_BITFLAG_OPENED))
     {
-      return -1;
+      fctx->fd = nxboot_open_update_partition();
+      if (fctx->fd < 0)
+        {
+          return -1;
+        }
+      fctx->flags |= SHV_FILE_POSIX_BITFLAG_OPENED;
     }
-  fctx->flags |= SHV_FILE_POSIX_BITFLAG_OPENED;
   return 0;
 }
 
