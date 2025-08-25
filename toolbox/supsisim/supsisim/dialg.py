@@ -284,7 +284,6 @@ class UpdimgDlg(QDialog):
         self.updinfo_box.clear()
         method: Optional[ImageUpdateMethod]
         if self.upd_met_combo.currentText() == "openocd":
-            print("tady")
             method = OpenocdUpdateMethod(self.openocd_params_edit.text(), self.path_to_img)
         else:
             method = SHVUpdateMethod(self.path_to_img, self.shvclient, self.shvparams)
