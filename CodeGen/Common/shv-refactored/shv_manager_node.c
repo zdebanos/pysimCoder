@@ -34,8 +34,10 @@ static int shv_pausectrl(shv_con_ctx_t *shv_ctx, shv_node_t *item, int rid)
     struct pysim_model_ctx *mctx = item_node->model_ctx;
     if (mctx->pt_ops.pausectrl) {
         mctx->pt_ops.pausectrl(mctx->pt_arg);
+        shv_send_empty_response(shv_ctx, rid);
         return 0;
     }
+    shv_send_error(shv_ctx, rid, SHV_RE_PLATFORM_ERROR, "NULL OPS");
     return -1;
 }
 
@@ -47,8 +49,10 @@ static int shv_resumectrl(shv_con_ctx_t *shv_ctx, shv_node_t *item, int rid)
     struct pysim_model_ctx *mctx = item_node->model_ctx;
     if (mctx->pt_ops.resumectrl) {
         mctx->pt_ops.resumectrl(mctx->pt_arg);
+        shv_send_empty_response(shv_ctx, rid);
         return 0;
     }
+    shv_send_error(shv_ctx, rid, SHV_RE_PLATFORM_ERROR, "NULL OPS");
     return -1;
 }
 
@@ -62,6 +66,7 @@ static int shv_getstate(shv_con_ctx_t *shv_ctx, shv_node_t *item, int rid)
         shv_send_int(shv_ctx, rid, mctx->pt_ops.getctrlstate(mctx->pt_arg));
         return 0;
     }
+    shv_send_error(shv_ctx, rid, SHV_RE_PLATFORM_ERROR, "NULL OPS");
     return -1;
 }
 
