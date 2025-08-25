@@ -557,16 +557,6 @@ class ShvTreeGenerator:
             "};\n\n"
         )
         self.f.write(text)
-        text = (
-            "const shv_file_node_t shv_node_fwupdate = {\n" +
-            "    .shv_node = {\n" +
-            '        .name = "fwupdate",\n'
-            "        .dir = UL_CAST_UNQ1(shv_dmap_t *, &shv_fwupdate_dmap),\n" +
-            "        .children = { .mode = CONF_SHV_TREE_TYPE }\n" +
-            "    },\n" +
-            "    .model_ctx = &" + self.model + "_ctx\n" +
-            "};\n\n"
-        )
 
         text = (
             "const shv_node_t *const shv_tree_root_items[] = {\n"
@@ -631,7 +621,7 @@ class ShvTreeGenerator:
         # The reason is that in certain scenarios, there's no API to get
         # the params as const.
         text += "#ifdef CONF_SHV_UPDATES_USED\n"
-        text += '  shv_file_node_t *shv_fwupdate_node = shv_tree_file_node_new("fwupdate", &shv_fwupdate_dmap, CONF_SHV_TREE_TYPE);\n'
+        text += '  shv_file_node_t *shv_fwupdate_node = shv_tree_file_node_new("fwUpdate", &shv_fwupdate_dmap, CONF_SHV_TREE_TYPE);\n'
         text += "  if (shv_fwupdate_node" + " == NULL)\n"
         text += "    return -1;\n"
         text += "  shv_init_fwupdate(&" + self.model + "_pt_ctx, shv_fwupdate_node);\n"
