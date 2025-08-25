@@ -6,6 +6,12 @@
 #define CG_STUPD 3
 #define CG_END   4
 
+enum pysim_model_state
+{
+  PYSIM_MODEL_CTRLLOOP_NOTRUNNING,
+  PYSIM_MODEL_CTRLLOOP_RUNNING
+};
+
 typedef struct {
   int nin;             /* Number of inputs */
   int nout;            /* Number of outputs */
