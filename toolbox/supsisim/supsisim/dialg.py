@@ -2,7 +2,14 @@ from supsisim.qtvers import *
 
 from supsisim.const import path
 from supsisim.getTemplates import dictTemplates
+from supsisim.image_update import ImageUpdateMethod, OpenocdUpdateMethod, SHVUpdateMethod
+from supsisim.shv.client import ShvClient
+from supsisim.shv.SHVInstance import SHVInstance
+from PyQt6.QtCore import QThread, pyqtSignal
+from PyQt6.QtGui import QFont
+from typing import Any, Callable, Optional
 from os import listdir
+import asyncio
 
 class IO_Dialog(QDialog):
     def __init__(self,parent=None):
@@ -230,6 +237,40 @@ class SHVDlg(QDialog):
         self.setLayout(grid)
 
 class UpdimgDlg(QDialog):
+    class _UploadThread(QThread):
+        textbox_sig = pyqtSignal(str)
+
+        def __init__(
+                self,
+                parent: Any,
+                method: ImageUpdateMethod,
+                logbox: QTextEdit):
+            super().__init__(parent)
+            self.method = method
+            self.logbox = logbox
+            self.textbox_sig.connect(self.logbox.append)
+
+        async def _wrapper_run(self):
+            queue = asyncio.Queue()
+            self.running = True
+            task = asyncio.create_task(self.method.upload(queue))
+
+            while True:
+                event = await queue.get()
+                if isinstance(event, str):
+                    self.textbox_sig.emit(event)
+                elif isinstance(event, bool):
+                    if event:
+                        self.textbox_sig.emit("Upload performed succesfully.")
+                    else:
+                        self.textbox_sig.emit("Upload failed.")
+                    break
+
+            await task
+
+        def run(self) -> None:
+            asyncio.run(self._wrapper_run())
+
     def _on_upd_met_change(self, value):
         en: bool = False
         if value == "openocd":
@@ -239,7 +280,17 @@ class UpdimgDlg(QDialog):
         self.openocd_params_edit.setEnabled(en)
 
     def _on_start_upd_pushed(self):
-        pass
+        self.running = True
+        self.updinfo_box.clear()
+        method: Optional[ImageUpdateMethod]
+        if self.upd_met_combo.currentText() == "openocd":
+            print("tady")
+            method = OpenocdUpdateMethod(self.openocd_params_edit.text(), self.path_to_img)
+        else:
+            method = SHVUpdateMethod(self.path_to_img, self.shvclient, self.shvparams)
+        self.thrd = self._UploadThread(self, method, self.updinfo_box)
+        self.thrd.start()
+        self.running = False
 
     def _on_cancel_upd_pushed(self):
         pass
@@ -251,20 +302,25 @@ class UpdimgDlg(QDialog):
         msg.setText(
             "Currently only supporting nuttx!!\n" +
             "Update method: choose openocd or SHV NXBoot Update.\n" +
-            "When openocd is chosen, fill in the shell parameters.\n" +
-            "When SHV NXBoot Update is chosen, it is expected\n" +
-            "  1) you're running NuttX model with SHV turned on\n" +
-            "  2) the parameters in the SHV option are set correctly."
+            "When openocd is chosen, fill in the shell parameters needed to flash the device:\n"
+            "  - fill in the binary to be flashed as @PYSIM_IMG@ in the command"
+            "When SHV NXBoot Update is chosen, it is expected:\n" +
+            "  1) you're running NuttX model with SHV turned on,\n" +
+            "  2) the parameters from the SHV dialog are used to interface the updater.\n"
         )
         msg.setStandardButtons(QMessageBox.StandardButton.Ok)
         msg.setFixedSize(msg.size())
         msg.exec()
 
-    def __init__(self, parent=None):
+    def __init__(self, path_to_img: str, shvparams: SHVInstance, parent=None):
         super(UpdimgDlg, self).__init__(None)
         self.setWindowModality(Qt.WindowModality.ApplicationModal)
         self.resize(600, 500)
-
+        self.running: bool = False
+        self.path_to_img = path_to_img
+        self.shvclient = ShvClient()
+        self.shvparams = shvparams
+        f = QFont("Monospace")
         # Top layout
         top_layout = QWidget(self)
         grid_top = QGridLayout(top_layout)
@@ -283,14 +339,20 @@ class UpdimgDlg(QDialog):
         self.upd_met_combo.currentTextChanged.connect(self._on_upd_met_change)
         self.openocd_params_lab = QLabel('Openocd shell parameters')
         self.openocd_params_edit = QLineEdit()
+        self.openocd_params_edit.setFont(f)
 
         self.start_pb = QPushButton('Start Update')
+        self.start_pb.clicked.connect(self._on_start_upd_pushed)
         self.cancel_pb = QPushButton('Cancel Update')
+        self.cancel_pb.clicked.connect(self._on_cancel_upd_pushed)
         self.help_pb = QPushButton('Help')
+        self.ok_pb = QPushButton('OK')
         self.help_pb.clicked.connect(self._on_help_pushed)
+        self.ok_pb.clicked.connect(self.accept)
 
         self.updinfo_box_lab = QLabel('Update procedure log')
         self.updinfo_box = QTextEdit()
+        self.updinfo_box.setFont(f)
 
         grid_top.addWidget(self.upd_met_lab, 0, 0)
         grid_top.addWidget(self.upd_met_combo, 0, 1)
@@ -300,6 +362,7 @@ class UpdimgDlg(QDialog):
         grid_button.addWidget(self.start_pb, 0, 0)
         grid_button.addWidget(self.cancel_pb, 0, 1)
         grid_button.addWidget(self.help_pb, 0, 2)
+        grid_button.addWidget(self.ok_pb, 0, 3)
 
         self.updinfo_box.setFixedHeight(300)
         self.updinfo_box.setMinimumWidth(0)

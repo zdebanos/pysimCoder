@@ -106,6 +106,7 @@ class ShvClient:
         self.asyncio_thread.start()
 
     def __del__(self) -> None:
+        print("Stopping SHV connection!")
         self.asyncio_loop.stop()
 
     def _connect(self) -> None:

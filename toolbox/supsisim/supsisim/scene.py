@@ -8,7 +8,7 @@ from supsisim.dialg import RTgenDlg, SHVDlg, UpdimgDlg
 from supsisim.const import VERSION, pyrun, TEMP, respath, BWmin
 from supsisim.getTemplates import dictTemplates
 from supsisim.RCPblk import RcpParam
-from .shv import ShvClient
+from .shv import ShvClient, SHVInstance
 from lxml import etree
 import os
 import io
@@ -33,20 +33,6 @@ class GraphicsView(QGraphicsView):
         factor = 1.41 ** (-event.angleDelta().y() / 240.0)
         self.scale(factor, factor)
 
-class SHVInstance:
-    def __init__(self, filename):
-        self.used = False
-        self.ip = '127.0.0.1'
-        self.port = '3755'
-        self.user = 'admin'
-        self.passw = 'admin!123'
-        self.devid = filename
-        self.mount = 'test'
-
-        self.tuned = False
-        self.updates = False
-
-        self.tree = 'GAVL'
 
 class Scene(QGraphicsScene):
     class UpdimgContext():
@@ -114,6 +100,9 @@ class Scene(QGraphicsScene):
         vals = [self.SHV.used, self.SHV.ip, self.SHV.port, self.SHV.user, self.SHV.passw,
                 self.SHV.devid, self.SHV.mount, self.SHV.tree, self.SHV.updates]
         dataDict['SHV'] = dict(zip(keys, vals))
+        keys = ['method', 'openocd_params']
+        vals = [self.updimgCtx.met, self.updimgCtx.openocd_params]
+        dataDict['updimg']  = dict(zip(keys, vals))
 
         self.saveItems(dataDict)
 
@@ -222,6 +211,12 @@ class Scene(QGraphicsScene):
             self.SHV.mount = dataDict['SHV']['mount']
             self.SHV.tree = dataDict['SHV']['tree']
             self.SHV.updates = dataDict['SHV']['updates']
+        except:
+            pass
+
+        try:
+            self.updimgCtx.met = dataDict['updimg']['method']
+            self.updimgCtx.openocd_params = dataDict['updimg']['openocd_params']
         except:
             pass
 
@@ -409,7 +404,7 @@ class Scene(QGraphicsScene):
            self.template != "nuttx.tmf":
             return
 
-        dialog = UpdimgDlg(self)
+        dialog = UpdimgDlg("./" + self.mainw.filename + ".nximg", self.SHV, parent=self)
         dialog.upd_met_combo.addItem("openocd")
         if self.SHV.updates == True:
             dialog.upd_met_combo.addItem("SHV NXBoot Update")
