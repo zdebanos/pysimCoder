@@ -336,7 +336,7 @@ static void *rt_task(void *p)
 
       /* The loop now starts */
 
-      mctx->running_state = 1;
+      mctx->running_state = PYSIM_MODEL_CTRLLOOP_RUNNING;
       puts("CTRLLOOP START");
       while (!mctx->ctrlloopend)
         {
@@ -421,7 +421,7 @@ static void *rt_task(void *p)
 
       /* Restore mctx state */
 
-      mctx->running_state = 0;
+      mctx->running_state = PYSIM_MODEL_CTRLLOOP_NOTRUNNING;
       mctx->nloops = 0;
       mctx->maxlat_wakeup = 0;
       mctx->maxlat_afterisr = 0;
@@ -627,7 +627,7 @@ int main(int argc, char** argv)
 
   sem_init(&NAME(MODEL, _pt_ctx).pause_barrier, 0, 0);
   NAME(MODEL, _pt_ctx).ctrlloopend = 0;
-  NAME(MODEL, _pt_ctx).running_state = 0;
+  NAME(MODEL, _pt_ctx).running_state = PYSIM_MODEL_CTRLLOOP_NOTRUNNING;
 
   proc_opt(argc, argv);
   signal(SIGINT, endme);
