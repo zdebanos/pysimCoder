@@ -580,6 +580,18 @@ class ShvTreeGenerator:
         self.f.write(text)
         self.f.write("#endif /* CONF_SHV_TREE_STATIC */\n\n")
 
+    def _generate_fwupdate_init(self) -> str:
+        text  = "#ifdef CONF_SHV_UPDATES_USED\n"
+        text += '  shv_file_node_t *shv_fwupdate_node = shv_tree_file_node_new("fwUpdate", &shv_fwupdate_dmap, CONF_SHV_TREE_TYPE);\n'
+        text += "  if (shv_fwupdate_node" + " == NULL)\n"
+        text += "    return -1;\n"
+        text += "  shv_init_fwupdate(&" + self.model + "_pt_ctx, shv_fwupdate_node);\n"
+        text += "  shv_tree_add_child((const shv_node_t*) &shv_tree_root, &shv_fwupdate_node->shv_node);\n"
+        text += "#else\n"
+        text += "  shv_file_node_t *shv_fwupdate_node = NULL;\n"
+        text += "#endif /* CONF_SHV_UPDATES_USED */\n"
+        return text
+
     def generate_init(self) -> None:
         text = "#ifdef CONF_SHV_USED\n"
         text += "int " + self.model + "_com_init(shv_attention_signaller at_signlr)\n"
@@ -607,26 +619,21 @@ class ShvTreeGenerator:
             "  " + self.model + '_ctx.pt_ops.comprio = &' + self.model + '_comprio;\n'
         )
         text += "  block_name_map_" + self.model + ".model_ctx = &" + self.model + "_ctx;\n"
-        text += (
+        # Generate the update node dynamically, regardless of the tree type.
+        # The reason is that in certain scenarios, there's no API to get
+        # the params as const.
+        text += self._generate_fwupdate_init()
+        self.f.write(text)
+        text = (
             "  "
             + self.model
             + "_shv_ctx = shv_tree_init(&block_name_map_"
             + self.model
             + ", (const shv_node_t *) &shv_tree_root, CONF_SHV_TREE_TYPE, "
-            + "&shv_conn, at_signlr);\n"
+            + "&shv_conn, at_signlr, shv_fwupdate_node);\n"
         )
         text += "  if (" + self.model + "_shv_ctx == NULL)\n"
         text += "    return -1;\n"
-        # Generate the update node dynamically, regardless of the tree type.
-        # The reason is that in certain scenarios, there's no API to get
-        # the params as const.
-        text += "#ifdef CONF_SHV_UPDATES_USED\n"
-        text += '  shv_file_node_t *shv_fwupdate_node = shv_tree_file_node_new("fwUpdate", &shv_fwupdate_dmap, CONF_SHV_TREE_TYPE);\n'
-        text += "  if (shv_fwupdate_node" + " == NULL)\n"
-        text += "    return -1;\n"
-        text += "  shv_init_fwupdate(&" + self.model + "_pt_ctx, shv_fwupdate_node);\n"
-        text += "  shv_tree_add_child((const shv_node_t*) &shv_tree_root, &shv_fwupdate_node->shv_node);\n"
-        text += "#endif /* CONF_SHV_UPDATES_USED */\n"
         text += "  return 0;\n"
         text += "}\n"
         text += "#endif /* CONF_SHV_USED */\n\n"

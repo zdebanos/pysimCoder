@@ -23,7 +23,9 @@ struct shv_node_model_ctx *shv_node_model_ctx_new(const char *child_name,
 shv_con_ctx_t *shv_tree_init(python_block_name_map * block_map,
                              const shv_node_t *static_root, int mode,
                              struct shv_connection *conn,
-                             shv_attention_signaller at_signlr);
+                             shv_attention_signaller at_signlr,
+                             shv_file_node_t *fwupdate_node);
+
 void shv_tree_end(shv_con_ctx_t *ctx, int mode);
 
 extern const shv_dmap_t shv_blk_dmap;

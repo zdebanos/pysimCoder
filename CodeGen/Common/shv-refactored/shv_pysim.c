@@ -362,12 +362,16 @@ struct shv_node_model_ctx *shv_node_model_ctx_new(const char *child_name,
  *  Entry point for SHV related operations. Calls shv_tree_create to create
  *  a SHV tree and then initialize SHV connection.
  *
+ *  File node is needed to be passed from the generated code, as it
+ *  requires platform dependant initialization.
+ *
  ****************************************************************************/
 
 shv_con_ctx_t *shv_tree_init(python_block_name_map * block_map,
                              const shv_node_t *static_root, int mode,
                              struct shv_connection *conn,
-                             shv_attention_signaller at_signlr)
+                             shv_attention_signaller at_signlr,
+                             shv_file_node_t *fwupdate_root)
 {
   const shv_node_t *root;
   int comprio;
@@ -396,6 +400,13 @@ shv_con_ctx_t *shv_tree_init(python_block_name_map * block_map,
   else
     {
       root = static_root;
+    }
+
+  /* Add the remaining file node */
+
+  if (fwupdate_root != NULL)
+    {
+      shv_tree_add_child((shv_node_t*) root, &fwupdate_root->shv_node);
     }
 
   /* Initialize SHV connection */
