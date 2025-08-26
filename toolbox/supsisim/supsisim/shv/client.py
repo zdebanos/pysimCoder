@@ -5,6 +5,8 @@ SHV client.
 import asyncio
 from threading import Thread
 
+from shv import RpcUrl, RpcError, SHVType, SHVBytes
+
 try:
     from shv import SHVType
     from shv.rpcapi.client import SHVClient
@@ -208,3 +210,67 @@ class ShvClient:
 
     def disconnect(self):
         self._disconnect()
+
+
+async def _fwupdate_met_call(client: SHV_CLIENT, mount_point: str, device_id: str,
+    met_name: str, arg: SHVType = None) -> SHVType | None:
+    if met_name != "reset":
+        call_url = f"{mount_point}/{device_id}/fwUpdate"
+    else:
+        call_url = f"{mount_point}/{device_id}/.device"
+    try:
+        if arg is not None:
+            result = await client.call(call_url, met_name, arg)
+        else:
+            result = await client.call(call_url, met_name)
+        return result
+    except RpcError as exc:
+        print(exc)
+        return None
+
+async def _stat_file(client: SHV_CLIENT, mount_point: str, device_id: str) -> SHVType | None:
+    return await _fwupdate_met_call(client, mount_point, device_id, "stat")
+
+async def _write_file(client: SHV_CLIENT, mount_point: str, device_id: str,
+    chunk: bytes, offset: int) -> SHVType | None:
+    return await _fwupdate_met_call(client, mount_point, device_id, "write", [offset, SHVBytes(chunk)])
+
+async def _crc_file(client: SHV_CLIENT, mount_point: str, device_id: str,
+    start: int, size: int) -> SHVType | None:
+    return await _fwupdate_met_call(client, mount_point, device_id, "crc", [start, size])
+
+async def _reset_dev(client: SHV_CLIENT, mount_point: str, device_id: str) -> SHVType | None:
+    return await _fwupdate_met_call(client, mount_point, device_id, "reset")
+
+class ShvFwUpdateClient(ShvClient):
+    def __init__(self):
+        super().__init__()
+
+    def stat_file(self):
+        ret: Optional
+        client = self._get_connection()
+        ret = asyncio.run_coroutine_threadsafe(
+            _stat_file(client, self.mount_point, self.device_id),
+            self.asyncio_loop,
+        ).result()
+        return ret
+
+    def write_chunk(self, chunk: bytes, offset: int):
+        client = self._get_connection()
+        ret = asyncio.run_coroutine_threadsafe(
+            _write_file(client, self.mount_point, self.device_id, chunk, offset),
+            self.asyncio_loop,
+        ).result()
+        return ret
+
+    def get_crc(self, start: int, size: int):
+        client = self._get_connection()
+        ret = asyncio.run_coroutine_threadsafe(
+            _crc_file(
+                client, self.mount_point, self.device_id, start, size),
+            self.asyncio_loop,
+        ).result()
+        # Make it unsigned
+        if ret == None:
+            return None
+        return ret & 0xFFFFFFFF

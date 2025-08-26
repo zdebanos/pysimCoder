@@ -3,7 +3,7 @@ from supsisim.qtvers import *
 from supsisim.const import path
 from supsisim.getTemplates import dictTemplates
 from supsisim.image_update import ImageUpdateMethod, OpenocdUpdateMethod, SHVUpdateMethod
-from supsisim.shv.client import ShvClient
+from supsisim.shv.client import ShvFwUpdateClient
 from supsisim.shv.SHVInstance import SHVInstance
 from PyQt6.QtCore import QThread, pyqtSignal
 from PyQt6.QtGui import QFont
@@ -301,8 +301,8 @@ class UpdimgDlg(QDialog):
         msg.setText(
             "Currently only supporting nuttx!!\n" +
             "Update method: choose openocd or SHV NXBoot Update.\n" +
-            "When openocd is chosen, fill in the shell parameters needed to flash the device:\n"
-            "  - fill in the binary to be flashed as @PYSIM_IMG@ in the command"
+            "When openocd is chosen, fill in the shell parameters needed to flash the device:\n" +
+            "  - fill in the binary to be flashed as @PYSIM_IMG@ in the command\n" +
             "When SHV NXBoot Update is chosen, it is expected:\n" +
             "  1) you're running NuttX model with SHV turned on,\n" +
             "  2) the parameters from the SHV dialog are used to interface the updater.\n"
@@ -317,7 +317,7 @@ class UpdimgDlg(QDialog):
         self.resize(600, 500)
         self.running: bool = False
         self.path_to_img = path_to_img
-        self.shvclient = ShvClient()
+        self.shvclient = ShvFwUpdateClient()
         self.shvparams = shvparams
         f = QFont("Monospace")
         # Top layout
