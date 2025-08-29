@@ -33,4 +33,4 @@ extern const shv_dmap_t shv_fwstable_dmap;
 
 struct shv_fwstable_node *shv_fwstable_node_new(const shv_dmap_t *dir, int mode);
 
-#endif /* _SHV_MANAGER_NODE_H */
+#endif /* _SHV_FWSTABLE_NODE_H */

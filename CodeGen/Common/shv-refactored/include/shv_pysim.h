@@ -13,6 +13,30 @@
 #include <shv_fwstable_node.h>
 #include <pyblock.h>
 
+/* TBD in the future: The Communication tree structure is as follows:
+ * (to allow communication with multiple models and its centralized management)
+ *
+ * SHV Tree Root
+ * |- .device         // a node that is part of SHV specification
+ * |- fwUpdate        // a file node used to do firmware updates
+ * |- fwStable        // a node used to confirm a newly updated image
+ * |- models          // the node tree of models
+ *    |- model1
+ *       |- manager   // a model's manager used to control its execution
+ *       |- blocks    // a tree of model's blocks
+ *       |- inputs    // a tree of model's inputs
+ *       |- outputs   // a tree of model's outputs
+ *    |- model2
+ *       |- manager
+ *       |- blocks
+ *       |- inputs
+ *       |- outputs
+ *    ...
+ *    |- modelN
+ *       ...
+ */
+
+/* A SHV node used by the model's manager */
 typedef struct shv_node_model_ctx {
   shv_node_t shv_node;               /* Node instance */
   struct pysim_model_ctx *model_ctx; /* A pointer to the model's context, needed for interaction */

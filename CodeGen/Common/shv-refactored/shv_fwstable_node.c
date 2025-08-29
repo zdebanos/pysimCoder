@@ -55,6 +55,12 @@ static const shv_method_des_t *const shv_fwstable_dmap_items[] =
 
 const shv_dmap_t shv_fwstable_dmap = SHV_CREATE_NODE_DMAP(fwstable, shv_fwstable_dmap_items);
 
+static void _shv_fwstable_node_destructor(shv_node_t *this)
+{
+    struct shv_fwstable_node *item = UL_CONTAINEROF(this, struct shv_fwstable_node, shv_node);
+    free(item);
+}
+
 struct shv_fwstable_node *shv_fwstable_node_new(const shv_dmap_t *dir, int mode)
 {
     struct shv_fwstable_node *item = calloc(1, sizeof(struct shv_fwstable_node));
@@ -62,5 +68,6 @@ struct shv_fwstable_node *shv_fwstable_node_new(const shv_dmap_t *dir, int mode)
         return NULL;
     }
     shv_tree_node_init(&item->shv_node, "fwStable", dir, mode);
+    item->shv_node.vtable.destructor = _shv_fwstable_node_destructor;
     return item;
 }

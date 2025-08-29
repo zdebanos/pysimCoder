@@ -343,16 +343,22 @@ static void shv_tree_create(python_block_name_map * block_map,
     }
 }
 
+static void _shv_node_model_ctx_destructor(shv_node_t *this)
+{
+  struct shv_node_model_ctx *item = UL_CONTAINEROF(this, struct shv_node_model_ctx, shv_node);
+  free(item);
+}
+
 struct shv_node_model_ctx *shv_node_model_ctx_new(const char *child_name,
                                                   const shv_dmap_t *dir,
                                                   int mode)
 {
-    struct shv_node_model_ctx *item = malloc(sizeof(struct shv_node_model_ctx));
+    struct shv_node_model_ctx *item = calloc(1, sizeof(struct shv_node_model_ctx));
     if (item == NULL) {
         return NULL;
     }
-    memset(item, 0, sizeof(struct shv_node_model_ctx));
     shv_tree_node_init(&item->shv_node, child_name, dir, mode);
+    item->shv_node.vtable.destructor = _shv_node_model_ctx_destructor;
     return item;
 }
 

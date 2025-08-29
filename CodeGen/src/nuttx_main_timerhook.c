@@ -28,6 +28,8 @@
  * Included Files
  ****************************************************************************/
 
+#include <platform.h>
+
 #include <stdlib.h>
 #include <stdio.h>
 #include <stdbool.h>
@@ -53,24 +55,17 @@
 #endif
 
 #ifdef CONF_SHV_USED
-#include <shv/tree/shv_com.h>
-#include <shv/tree/shv_tree.h>
 #ifdef CONF_SHV_UPDATES_USED
 #include <nxboot.h>
 #include <nuttx/mtd/mtd.h>
 #include <sys/boardctl.h>
 #include <unistd.h>
-#include <shv/tree/shv_file_node.h>
-#include <shv/tree/shv_clayer_posix.h> /* For the file node override */
 #endif
 #endif
 
 /****************************************************************************
  * Pre-processor Definitions
  ****************************************************************************/
-
-#define XNAME(x,y)  x##y
-#define NAME(x,y)   XNAME(x,y)
 
 #ifndef PYSIM_NUTTX_SAMPLETIMER
 #error "You need to define PYSIM_NUTTX_SAMPLETIMER (e.g. /dev/timer0)"
@@ -83,15 +78,6 @@
 /****************************************************************************
  * Private Function Prototypes
  ****************************************************************************/
-
-int NAME(MODEL, _init)(void);
-int NAME(MODEL, _isr)(double);
-int NAME(MODEL, _end)(void);
-double NAME(MODEL, _get_tsamp)(void);
-#ifdef CONF_SHV_USED
-int NAME(MODEL, _com_init)(shv_attention_signaller at_signlr);
-void NAME(MODEL, _com_end)(void);
-#endif
 
 static int timespec_diff_us(struct timespec t1, struct timespec t2);
 static void *benchmark_task(void *p);
@@ -622,15 +608,15 @@ int shv_init_fwupdate(struct pysim_platform_model_ctx *ctx,
 #endif /* CONF_SHV_UPDATES_USED */
 
 int shv_init_fwstable(struct pysim_platform_model_ctx *ctx,
-                      struct shv_fwstable_node *node)
+                      struct shv_fwstable_node *fwstable_node)
 {
-  if (ctx == NULL || node == NULL)
+  if (ctx == NULL || fwstable_node == NULL)
     {
       return -1;
     }
 
 #ifdef CONFIG_BOOT_NXBOOT
-  node->ops.confirm = nxboot_confirm;
+  fwstable_node->ops.confirm = nxboot_confirm;
 #endif
   return 0;
 }
