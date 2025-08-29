@@ -60,7 +60,7 @@
 #include <nuttx/mtd/mtd.h>
 #include <sys/boardctl.h>
 #include <unistd.h>
-#include <shv/tree/shv_file_com.h>
+#include <shv/tree/shv_file_node.h>
 #include <shv/tree/shv_clayer_posix.h> /* For the file node override */
 #endif
 #endif
@@ -565,7 +565,8 @@ int NAME(MODEL, _getctrlstate)(struct pysim_platform_model_ctx *ctx)
   return ctx->running_state;
 }
 
-#if defined(CONF_SHV_USED) && defined(CONF_SHV_UPDATES_USED)
+#ifdef CONF_SHV_USED
+#ifdef CONF_SHV_UPDATES_USED
 static int _shv_nxboot_opener(shv_file_node_t *item)
 {
   struct shv_file_node_fctx *fctx = (struct shv_file_node_fctx*) item->fctx;
@@ -585,7 +586,7 @@ static int _shv_nxboot_opener(shv_file_node_t *item)
  * for NuttX and allows for NXBoot integration.
  */
 int shv_init_fwupdate(struct pysim_platform_model_ctx *ctx,
-                       shv_file_node_t *file_node)
+                      shv_file_node_t *file_node)
 {
   if (ctx == NULL || file_node == NULL)
     {
@@ -608,16 +609,32 @@ int shv_init_fwupdate(struct pysim_platform_model_ctx *ctx,
       return -1;
     }
 
-  file_node->file_type = REGULAR;
+  file_node->file_type = SHV_FILE_MTD;
   file_node->file_maxsize = geometry.erasesize * geometry.neraseblocks;
   file_node->file_pagesize = geometry.blocksize;
+  file_node->file_erasesize = geometry.erasesize;
 
   file_node->fops.opener = _shv_nxboot_opener;
 #endif
 
   return 0;
 }
+#endif /* CONF_SHV_UPDATES_USED */
+
+int shv_init_fwstable(struct pysim_platform_model_ctx *ctx,
+                      struct shv_fwstable_node *node)
+{
+  if (ctx == NULL || node == NULL)
+    {
+      return -1;
+    }
+
+#ifdef CONFIG_BOOT_NXBOOT
+  node->ops.confirm = nxboot_confirm;
 #endif
+  return 0;
+}
+#endif /* CONF_SHV_USED */
 
 int main(int argc, char** argv)
 {

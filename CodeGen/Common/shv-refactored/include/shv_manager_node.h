@@ -20,7 +20,6 @@
 #define _SHV_MAANGER_NODE_H
 
 #include <shv/tree/shv_tree.h>
-#include <shv_pysim.h>
 
 extern const shv_dmap_t shv_manager_dmap;
 

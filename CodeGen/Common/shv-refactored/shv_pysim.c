@@ -25,12 +25,11 @@
 #include <shv/tree/shv_tree.h>
 #include <shv/tree/shv_connection.h>
 #include <shv/tree/shv_methods.h>
-#include <shv/tree/shv_file_com.h>
+#include <shv/tree/shv_file_node.h>
 #include <ulut/ul_utdefs.h>
 
 #include <shv_pysim.h>
 #include <shv_manager_node.h>
-#include <shv_fwupdate_node.h>
 
 static const shv_method_des_t * const shv_blk_dmap_items[] = {
   &shv_dmap_item_dir,
@@ -281,7 +280,9 @@ static void shv_tree_create(python_block_name_map * block_map,
   item_manager->model_ctx = block_map->model_ctx;
   shv_tree_add_child(shv_tree_root, &item_manager->shv_node);
 
-  /* Do not allocate the update node. The generated code will take care of this. */
+  /* Do not allocate the update and .device nodes.
+   * The generated code will take care of this.
+   */
 
   /* For each block */
 
@@ -371,7 +372,9 @@ shv_con_ctx_t *shv_tree_init(python_block_name_map * block_map,
                              const shv_node_t *static_root, int mode,
                              struct shv_connection *conn,
                              shv_attention_signaller at_signlr,
-                             shv_file_node_t *fwupdate_root)
+                             shv_file_node_t *fwupdate_root,
+                             shv_dotdevice_node_t *dotdevice_node,
+                             struct shv_fwstable_node *fwstable_node)
 {
   const shv_node_t *root;
   int comprio;
@@ -402,11 +405,19 @@ shv_con_ctx_t *shv_tree_init(python_block_name_map * block_map,
       root = static_root;
     }
 
-  /* Add the remaining file node */
+  /* Add the remaining file and .device nodes */
 
   if (fwupdate_root != NULL)
     {
       shv_tree_add_child((shv_node_t*) root, &fwupdate_root->shv_node);
+    }
+  if (dotdevice_node != NULL)
+    {
+      shv_tree_add_child((shv_node_t*) root, &dotdevice_node->shv_node);
+    }
+  if (fwstable_node != NULL)
+    {
+      shv_tree_add_child((shv_node_t*) root, &dotdevice_node->shv_node);
     }
 
   /* Initialize SHV connection */

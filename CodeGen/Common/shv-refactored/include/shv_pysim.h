@@ -9,6 +9,8 @@
 #include <shv/tree/shv_tree.h>
 #include <shv/tree/shv_connection.h>
 #include <shv/tree/shv_com.h>
+#include <shv/tree/shv_dotdevice_node.h>
+#include <shv_fwstable_node.h>
 #include <pyblock.h>
 
 typedef struct shv_node_model_ctx {
@@ -24,7 +26,9 @@ shv_con_ctx_t *shv_tree_init(python_block_name_map * block_map,
                              const shv_node_t *static_root, int mode,
                              struct shv_connection *conn,
                              shv_attention_signaller at_signlr,
-                             shv_file_node_t *fwupdate_node);
+                             shv_file_node_t *fwupdate_node,
+                             shv_dotdevice_node_t *dotdevice_node,
+                             struct shv_fwstable_node *fwstable_node);
 
 void shv_tree_end(shv_con_ctx_t *ctx, int mode);
 
