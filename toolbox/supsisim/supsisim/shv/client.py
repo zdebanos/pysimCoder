@@ -4,6 +4,9 @@ SHV client.
 
 import asyncio
 from threading import Thread
+from typing import Awaitable, Any, Optional
+from shv import RpcUrl, RpcError, SHVType, SHVBytes
+from enum import Enum
 
 from shv import RpcUrl, RpcError, SHVType, SHVBytes
 
@@ -87,7 +90,6 @@ async def _set_parameter_value(
 
 async def _is_connected(client: SHV_CLIENT) -> bool:
     return client.client.connected
-
 
 class ShvClient:
     """Representation of SHV client connection to the broker."""
@@ -213,64 +215,111 @@ class ShvClient:
 
 
 async def _fwupdate_met_call(client: SHV_CLIENT, mount_point: str, device_id: str,
-    met_name: str, arg: SHVType = None) -> SHVType | None:
-    if met_name != "reset":
-        call_url = f"{mount_point}/{device_id}/fwUpdate"
-    else:
-        call_url = f"{mount_point}/{device_id}/.device"
+    node: str, met_name: str, arg: SHVType = None) -> SHVType | None:
+    call_url = f"{mount_point}/{device_id}/{node}"
     try:
         if arg is not None:
-            result = await client.call(call_url, met_name, arg)
+            return await client.call(call_url, met_name, arg, call_timeout=10)
         else:
-            result = await client.call(call_url, met_name)
-        return result
+            return await client.call(call_url, met_name, call_timeout=10)
     except RpcError as exc:
         print(exc)
         return None
-
-async def _stat_file(client: SHV_CLIENT, mount_point: str, device_id: str) -> SHVType | None:
-    return await _fwupdate_met_call(client, mount_point, device_id, "stat")
-
-async def _write_file(client: SHV_CLIENT, mount_point: str, device_id: str,
-    chunk: bytes, offset: int) -> SHVType | None:
-    return await _fwupdate_met_call(client, mount_point, device_id, "write", [offset, SHVBytes(chunk)])
-
-async def _crc_file(client: SHV_CLIENT, mount_point: str, device_id: str,
-    start: int, size: int) -> SHVType | None:
-    return await _fwupdate_met_call(client, mount_point, device_id, "crc", [start, size])
-
-async def _reset_dev(client: SHV_CLIENT, mount_point: str, device_id: str) -> SHVType | None:
-    return await _fwupdate_met_call(client, mount_point, device_id, "reset")
+    except TimeoutError as exc:
+        print(exc)
+        return None
 
 class ShvFwUpdateClient(ShvClient):
     def __init__(self):
         super().__init__()
 
-    def stat_file(self):
-        ret: Optional
-        client = self._get_connection()
-        ret = asyncio.run_coroutine_threadsafe(
-            _stat_file(client, self.mount_point, self.device_id),
-            self.asyncio_loop,
-        ).result()
-        return ret
+    async def _fw_call(
+        self,
+        client: SHV_CLIENT,
+        mount_point: str,
+        device_id: str,
+        path: str,
+        method: str,
+        params: SHVType = None
+    ) -> SHVType | None:
+        return await _fwupdate_met_call(client, mount_point, device_id, path, method, params)
 
-    def write_chunk(self, chunk: bytes, offset: int):
-        client = self._get_connection()
-        ret = asyncio.run_coroutine_threadsafe(
-            _write_file(client, self.mount_point, self.device_id, chunk, offset),
-            self.asyncio_loop,
-        ).result()
-        return ret
+    def _run(self, cor: Awaitable[Any]) -> SHVType | None:
+        return asyncio.run_coroutine_threadsafe(cor, self.asyncio_loop).result()
 
-    def get_crc(self, start: int, size: int):
-        client = self._get_connection()
-        ret = asyncio.run_coroutine_threadsafe(
-            _crc_file(
-                client, self.mount_point, self.device_id, start, size),
-            self.asyncio_loop,
-        ).result()
-        # Make it unsigned
-        if ret == None:
-            return None
-        return ret & 0xFFFFFFFF
+    def stat_file(self) -> SHVType | None:
+        return self._run(self._fw_call(
+            self._get_connection(),
+            self.mount_point,
+            self.device_id,
+            "fwUpdate",
+            "stat"
+        ))
+
+    def write_chunk(self, chunk: bytes, offset: int) -> SHVType | None:
+        print("writing at", offset, "len =", len(chunk))
+        return self._run(self._fw_call(
+            self._get_connection(),
+            self.mount_point,
+            self.device_id,
+            "fwUpdate",
+            "write",
+            [offset, SHVBytes(chunk)]
+        ))
+
+    def get_crc(self, start: int, size: int) -> SHVType | None:
+        ret = self._run(self._fw_call(
+            self._get_connection(),
+            self.mount_point,
+            self.device_id,
+            "fwUpdate",
+            "crc",
+            [start, size]
+        ))
+        return None if ret is None else (ret & 0xFFFFFFFF)
+
+    def reset_device(self) -> SHVType | None:
+        return self._run(self._fw_call(
+            self._get_connection(),
+            self.mount_point,
+            self.device_id,
+            ".device",
+            "reset"
+        ))
+
+    def pause_ctrl(self) -> SHVType | None:
+        return self._run(self._fw_call(
+            self._get_connection(),
+            self.mount_point,
+            self.device_id,
+            "manager",
+            "pause"
+        ))
+
+    def get_ctrlstate(self) -> SHVType | None:
+        return self._run(self._fw_call(
+            self._get_connection(),
+            self.mount_point,
+            self.device_id,
+            "manager",
+            "getstate"
+        ))
+
+    def reset_device(self) -> SHVType | None:
+        return self._run(self._fw_call(
+            self._get_connection(),
+            self.mount_point,
+            self.device_id,
+            ".device",
+            "reset"
+        ))
+
+    def confirm_image(self) -> SHVType | None:
+        return self._run(self._fw_call(
+            self._get_connection(),
+            self.mount_point,
+            self.device_id,
+            "fwStable",
+            "confirm"
+        ))
+

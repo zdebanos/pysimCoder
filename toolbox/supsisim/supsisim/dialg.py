@@ -3,10 +3,12 @@ from supsisim.qtvers import *
 from supsisim.const import path
 from supsisim.getTemplates import dictTemplates
 from supsisim.image_update import ImageUpdateMethod, OpenocdUpdateMethod, SHVUpdateMethod
+from supsisim.image_confirm import ImageConfirmMethod, SHVConfirmMethod
 from supsisim.shv.client import ShvFwUpdateClient
 from supsisim.shv.SHVInstance import SHVInstance
-from PyQt6.QtCore import QThread, pyqtSignal
+from PyQt6.QtCore import QThread, pyqtSignal, pyqtSlot
 from PyQt6.QtGui import QFont
+from threading import Event
 from typing import Any, Callable, Optional
 from os import listdir
 import asyncio
@@ -237,39 +239,94 @@ class SHVDlg(QDialog):
         self.setLayout(grid)
 
 class UpdimgDlg(QDialog):
-    class _UploadThread(QThread):
+    class _UploadConfirmWorker(QThread):
         textbox_sig = pyqtSignal(str)
+        work_done   = pyqtSignal()
 
         def __init__(
                 self,
                 parent: Any,
-                method: ImageUpdateMethod,
-                logbox: QTextEdit):
+                logbox: QTextEdit,
+                work_completed_cb: Callable):
             super().__init__(parent)
-            self.method = method
             self.logbox = logbox
             self.textbox_sig.connect(self.logbox.append)
+            self.work_done.connect(work_completed_cb)
+            self.task: Optional[asyncio.Task[None]] = None
+
+            self.start_event = Event()
+            self.stop_event  = Event()
+            self.running = False
+            self.thrd_running = True
 
         async def _wrapper_run(self):
-            queue = asyncio.Queue()
+            # We are running, now
             self.running = True
-            task = asyncio.create_task(self.method.upload(queue))
 
-            while True:
-                event = await queue.get()
-                if isinstance(event, str):
-                    self.textbox_sig.emit(event)
-                elif isinstance(event, bool):
-                    if event:
-                        self.textbox_sig.emit("Upload performed succesfully.")
-                    else:
-                        self.textbox_sig.emit("Upload failed.")
+            queue = asyncio.Queue()
+            success_str: Optional[str]
+            failed_str: Optional[str]
+            if isinstance(self.method, ImageUpdateMethod):
+                self.task = asyncio.create_task(self.method.upload(queue))
+                success_str = "Upload successful!"
+                failed_str = "Upload failed!"
+            elif isinstance(self.method, ImageConfirmMethod):
+                self.task = asyncio.create_task(self.method.confirm(queue))
+                success_str = "Confirm successful!"
+                failed_str  = "Confirm failed!"
+            while not self.stop_event.is_set():
+                try:
+                    event = await asyncio.wait_for(queue.get(), timeout=0.5)
+                    if isinstance(event, str):
+                        self.textbox_sig.emit(event)
+                    elif isinstance(event, bool):
+                        if event:
+                            self.textbox_sig.emit(success_str)
+                        else:
+                            self.textbox_sig.emit(failed_str)
+                        break
+                except asyncio.TimeoutError:
+                    continue
+                except asyncio.CancelledError:
                     break
 
-            await task
+            try:
+                await self.task
+            except asyncio.CancelledError:
+                self.textbox_sig.emit("Task cancelled.")
+            # We are not running, now
+            self.running = False
+            self.stop_event.clear()
 
         def run(self) -> None:
-            asyncio.run(self._wrapper_run())
+            while self.thrd_running:
+                self.start_event.wait()
+                if not self.thrd_running:
+                    break
+                asyncio.run(self._wrapper_run())
+                self.work_done.emit()
+                self.start_event.clear()
+
+        def do_work(self, method: ImageUpdateMethod | ImageConfirmMethod) -> None:
+            if self.running:
+                # Work already running, stop.
+                self.work_done.emit()
+                return
+            self.method = method
+            self.textbox_sig.emit("Upload started")
+            self.start_event.set()
+
+        def stop_work(self) -> None:
+            if not self.running:
+                return
+            self.textbox_sig.emit("Stopping event.")
+            self.stop_event.set()
+            self.task.cancel()
+
+        def stop_thrd(self) -> None:
+            self.thrd_running = False
+            # this effectively unlocks the loop
+            self.start_event.set()
 
     def _on_upd_met_change(self, value):
         en: bool = False
@@ -280,19 +337,32 @@ class UpdimgDlg(QDialog):
         self.openocd_params_edit.setEnabled(en)
 
     def _on_start_upd_pushed(self):
-        self.running = True
         self.updinfo_box.clear()
         method: Optional[ImageUpdateMethod]
         if self.upd_met_combo.currentText() == "openocd":
             method = OpenocdUpdateMethod(self.openocd_params_edit.text(), self.path_to_img)
         else:
             method = SHVUpdateMethod(self.path_to_img, self.shvclient, self.shvparams)
-        self.thrd = self._UploadThread(self, method, self.updinfo_box)
-        self.thrd.start()
-        self.running = False
+
+        self.thrd.do_work(method)
+        self.start_pb.setEnabled(False)
+        self.confirm_pb.setEnabled(False)
+        self.cancel_pb.setEnabled(True)
 
     def _on_cancel_upd_pushed(self):
-        pass
+        if self.thrd.isRunning():
+            self.thrd.stop_work()
+
+    def _on_confirm_img_pushed(self):
+        method: Optonal[ImageConfirmMethod]
+        if self.upd_met_combo.currentText() == "openocd":
+            # No need to confirm openocd images
+            return
+        else:
+            method = SHVConfirmMethod(self.shvclient, self.shvparams)
+        self.thrd.do_work(method, self.updinfo_box)
+        self.thrd.start()
+        self.running = False
 
     def _on_help_pushed(self):
         msg = QMessageBox()
@@ -311,11 +381,23 @@ class UpdimgDlg(QDialog):
         msg.setFixedSize(msg.size())
         msg.exec()
 
+    @pyqtSlot()
+    def _upload_confirm_work_completed(self):
+        self.start_pb.setEnabled(True)
+        self.confirm_pb.setEnabled(True)
+        self.cancel_pb.setEnabled(False)
+
+    @pyqtSlot()
+    def _ok_pb_override(self):
+        self._on_cancel_upd_pushed()
+        self.thrd.stop_thrd()
+        self.thrd.wait()
+        self.accept()
+
     def __init__(self, path_to_img: str, shvparams: SHVInstance, parent=None):
         super(UpdimgDlg, self).__init__(None)
         self.setWindowModality(Qt.WindowModality.ApplicationModal)
-        self.resize(600, 500)
-        self.running: bool = False
+        self.resize(800, 600)
         self.path_to_img = path_to_img
         self.shvclient = ShvFwUpdateClient()
         self.shvparams = shvparams
@@ -344,10 +426,14 @@ class UpdimgDlg(QDialog):
         self.start_pb.clicked.connect(self._on_start_upd_pushed)
         self.cancel_pb = QPushButton('Cancel Update')
         self.cancel_pb.clicked.connect(self._on_cancel_upd_pushed)
+        self.cancel_pb.setEnabled(False)
         self.help_pb = QPushButton('Help')
         self.ok_pb = QPushButton('OK')
+        self.confirm_pb = QPushButton('Confirm Image')
+
         self.help_pb.clicked.connect(self._on_help_pushed)
-        self.ok_pb.clicked.connect(self.accept)
+        self.ok_pb.clicked.connect(self._ok_pb_override)
+        self.confirm_pb.clicked.connect(self._on_confirm_img_pushed)
 
         self.updinfo_box_lab = QLabel('Update procedure log')
         self.updinfo_box = QTextEdit()
@@ -360,10 +446,11 @@ class UpdimgDlg(QDialog):
 
         grid_button.addWidget(self.start_pb, 0, 0)
         grid_button.addWidget(self.cancel_pb, 0, 1)
-        grid_button.addWidget(self.help_pb, 0, 2)
-        grid_button.addWidget(self.ok_pb, 0, 3)
+        grid_button.addWidget(self.confirm_pb, 0, 2)
+        grid_button.addWidget(self.help_pb, 0, 3)
+        grid_button.addWidget(self.ok_pb, 0, 4)
 
-        self.updinfo_box.setFixedHeight(300)
+        self.updinfo_box.setFixedHeight(500)
         self.updinfo_box.setMinimumWidth(0)
         button_layout.setFixedHeight(50)
         button_layout.setMinimumWidth(0)
@@ -376,3 +463,7 @@ class UpdimgDlg(QDialog):
         main_layout.addWidget(button_layout, stretch=0)
 
         self.setLayout(main_layout)
+
+        self.thrd = self._UploadConfirmWorker(self, self.updinfo_box,
+            self._upload_confirm_work_completed)
+        self.thrd.start()

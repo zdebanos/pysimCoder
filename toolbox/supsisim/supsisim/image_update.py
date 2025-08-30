@@ -115,6 +115,7 @@ class SHVUpdateMethod(ImageUpdateMethod):
             return
 
         queue.put_nowait("Connected to the SHV broker!")
+        await asyncio.sleep(5)
         stat_params = self.shvclient.stat_file()
         if stat_params == None:
             queue.put_nowait("Cannot call stat on the device!")
@@ -122,6 +123,22 @@ class SHVUpdateMethod(ImageUpdateMethod):
             return
         elif type(stat_params) != dict:
             queue.put_nowait("Excepted stat result to be dict, got:" + str(type(stat_params)))
+            self._upload_existing_file_quit(queue)
+            return
+
+        queue.put_nowait(f"Stopping the control loop")
+        self.shvclient.pause_ctrl()
+
+        # Now wait for the loop to stop (do polling)
+        poll_retries = 10
+        while poll_retries >= 0:
+            if self.shvclient.get_ctrlstate() == 0:
+                break
+            await asyncio.sleep(1)
+            poll_retries -= 1
+
+        if poll_retries == 0:
+            queue.put_nowait(f"The uploader could not stop the control loop.")
             self._upload_existing_file_quit(queue)
             return
 
@@ -169,8 +186,9 @@ class SHVUpdateMethod(ImageUpdateMethod):
 
         queue.put_nowait("CRC check OK, performing reset on the remote device.")
         queue.put_nowait("The remote device now performs fw update. This will take some while.")
-
-        # TODO: .device/reset
+        queue.put_nowait("After the update, you need to check firmware is running. And confirm it.")
+        await asyncio.sleep(0)
+        self.shvclient.reset_device()
 
         # All OK, signal successful upload.
         queue.put_nowait(True)
@@ -181,7 +199,7 @@ class SHVUpdateMethod(ImageUpdateMethod):
             self.f = open(self.path_to_img, mode="rb")
             await self._upload_existing_file(queue)
             self.f.close()
-        except e:
+        except:
             queue.put_nowait(f"Cannot find. Generate code first!")
             queue.put_nowait(False)
         
