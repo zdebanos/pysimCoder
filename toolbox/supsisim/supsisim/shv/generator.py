@@ -26,10 +26,12 @@ class ShvTreeGenerator:
         text += "#include <shv/tree/shv_tree.h>\n"
         text += "#include <shv/tree/shv_methods.h>\n"
         text += "#include <shv/tree/shv_com.h>\n"
+        text += "#include <shv/tree/shv_file_node.h>\n"
+        text += "#include <shv/tree/shv_dotdevice_node.h>\n"
         text += "#include <ulut/ul_utdefs.h>\n\n"
-        text += "#include \"shv_pysim.h\"\n"
-        text += '#include "shv_fwupdate_node.h"\n'
+        text += '#include "shv_pysim.h"\n'
         text += '#include "shv_manager_node.h"\n'
+        text += '#include "shv_fwstable_node.h"\n'
         self.f.write(text)
 
         if environ["SHV_TREE_TYPE"] == "GSA":
@@ -64,6 +66,7 @@ class ShvTreeGenerator:
 
             text = "/********** SHV Function Declarations **********/\n"
             text += "int shv_init_fwupdate(struct pysim_platform_model_ctx *ctx, shv_file_node_t *item);\n"
+            text += "int shv_init_fwstable(struct pysim_platform_model_ctx *ctx, struct shv_fwstable_node *item);\n"
             text += "\n"
             self.f.write(text)
 
@@ -546,6 +549,7 @@ class ShvTreeGenerator:
         text += "}};\n\n"
         self.f.write(text)
 
+        # Generate the manager node, in case of GSA_STATIC
         text = (
             "const shv_node_model_ctx_t shv_node_manager = {\n" +
             "    .shv_node = {\n" +
@@ -582,13 +586,36 @@ class ShvTreeGenerator:
 
     def _generate_fwupdate_init(self) -> str:
         text  = "#ifdef CONF_SHV_UPDATES_USED\n"
-        text += '  shv_file_node_t *shv_fwupdate_node = shv_tree_file_node_new("fwUpdate", &shv_fwupdate_dmap, CONF_SHV_TREE_TYPE);\n'
-        text += "  if (shv_fwupdate_node" + " == NULL)\n"
+        text += '  shv_file_node_t *shv_fwupdate_node = shv_tree_file_node_new("fwUpdate", &shv_file_node_dmap, CONF_SHV_TREE_TYPE);\n'
+        text += "  if (shv_fwupdate_node == NULL)\n"
         text += "    return -1;\n"
         text += "  shv_init_fwupdate(&" + self.model + "_pt_ctx, shv_fwupdate_node);\n"
         text += "  shv_tree_add_child((const shv_node_t*) &shv_tree_root, &shv_fwupdate_node->shv_node);\n"
         text += "#else\n"
         text += "  shv_file_node_t *shv_fwupdate_node = NULL;\n"
+        text += "#endif /* CONF_SHV_UPDATES_USED */\n"
+        return text
+
+    def _generate_dotdevice_init(self) -> str:
+        text  = "  shv_dotdevice_node_t *shv_dotdevice_node = shv_tree_dotdevice_node_new(&shv_dotdevice_dmap, CONF_SHV_TREE_TYPE);\n"
+        text += "  if (shv_dotdevice_node == NULL)\n"
+        text += "    return -1;\n"
+        text += "  /* Fill in the dotdevice parameters */\n"
+        text += '  shv_dotdevice_node->name = "pysimCoder SHV compatible device";\n'
+        text += '  shv_dotdevice_node->version = "0.1.0";\n'
+        text += '  shv_dotdevice_node->serial_number = "0xDEADBEEF";\n'
+        text += "  shv_tree_add_child((const shv_node_t*) &shv_tree_root, &shv_dotdevice_node->shv_node);\n"
+        return text
+
+    def _generate_fwstable_init(self) -> str:
+        text  = "#ifdef CONF_SHV_UPDATES_USED\n"
+        text += "  struct shv_fwstable_node *fwstable_node = shv_fwstable_node_new(&shv_fwstable_dmap, CONF_SHV_TREE_TYPE);\n"
+        text += "  if (fwstable_node == NULL)\n"
+        text += "    return -1;\n"
+        text += "  /* Initialize the fwStable node */\n"
+        text += "  shv_init_fwstable(&" + self.model + "_pt_ctx, fwstable_node);\n"
+        text += "#else\n"
+        text += "  struct shv_fwstable_node *fwstable_node = NULL;\n"
         text += "#endif /* CONF_SHV_UPDATES_USED */\n"
         return text
 
@@ -619,18 +646,20 @@ class ShvTreeGenerator:
             "  " + self.model + '_ctx.pt_ops.comprio = &' + self.model + '_comprio;\n'
         )
         text += "  block_name_map_" + self.model + ".model_ctx = &" + self.model + "_ctx;\n"
-        # Generate the update node dynamically, regardless of the tree type.
-        # The reason is that in certain scenarios, there's no API to get
-        # the params as const.
-        text += self._generate_fwupdate_init()
         self.f.write(text)
+        # Generate the update node (file node) and .device node dynamically, regardless of the tree type.
+        # The reason is that these nodes are platform dependant and require platform dependant init.
+        self.f.write(self._generate_fwupdate_init())
+        self.f.write(self._generate_dotdevice_init())
+        self.f.write(self._generate_fwstable_init())
+        # Now construct the whole tree, using all the dynamically instantiated nodes.
         text = (
             "  "
             + self.model
             + "_shv_ctx = shv_tree_init(&block_name_map_"
             + self.model
             + ", (const shv_node_t *) &shv_tree_root, CONF_SHV_TREE_TYPE, "
-            + "&shv_conn, at_signlr, shv_fwupdate_node);\n"
+            + "&shv_conn, at_signlr, shv_fwupdate_node, shv_dotdevice_node, fwstable_node);\n"
         )
         text += "  if (" + self.model + "_shv_ctx == NULL)\n"
         text += "    return -1;\n"

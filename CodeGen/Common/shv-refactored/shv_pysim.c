@@ -280,7 +280,7 @@ static void shv_tree_create(python_block_name_map * block_map,
   item_manager->model_ctx = block_map->model_ctx;
   shv_tree_add_child(shv_tree_root, &item_manager->shv_node);
 
-  /* Do not allocate the update and .device nodes.
+  /* Do not allocate the fwUpdate, fwStable and .device nodes.
    * The generated code will take care of this.
    */
 
@@ -423,7 +423,7 @@ shv_con_ctx_t *shv_tree_init(python_block_name_map * block_map,
     }
   if (fwstable_node != NULL)
     {
-      shv_tree_add_child((shv_node_t*) root, &dotdevice_node->shv_node);
+      shv_tree_add_child((shv_node_t*) root, &fwstable_node->shv_node);
     }
 
   /* Initialize SHV connection */
