@@ -1,4 +1,4 @@
-all: dependencies allfiles lib install
+all: dependencies files allfiles lib install
 reduced: files lib install
 
 LIB = libpyblk.a
@@ -7,6 +7,9 @@ TARGET_INC = ../include
 INCLUDE = -I$(GENERIC_INC) -I$(TARGET_INC)
 COMMON_DIR = $(PYSUPSICTRL)/CodeGen/Common
 EXT_LIBS = $(PYSUPSICTRL)/ExtLibs
+SHV_COMPILED_INC_PATH = $(EXT_LIBS)/shv-libs4c-linux/_compiled/include
+SHV_COMPILED_LIB_PATH = $(EXT_LIBS)/shv-libs4c-linux/_compiled/lib
+SHV_REVISION = $(shell head -n1 "$(COMMON_DIR)/shv/shv-libs4c-revision.txt")
 
 .PHONY: all dependencies clean install allfiles
 
@@ -19,14 +22,10 @@ SRCALL += $(wildcard $(COMMON_DIR)/posix/*.c)
 SRCALL += $(wildcard $(COMMON_DIR)/AR2INO/*.c)
 
 ifeq ($(SHV),1)
-EXT_SHV_LIB = $(EXT_LIBS)/libshv/libshvchainpack/c
-
-SRCALL += $(EXT_SHV_LIB)/cchainpack.c $(EXT_SHV_LIB)/ccpcp.c \
-					$(EXT_SHV_LIB)/ccpcp_convert.c $(EXT_SHV_LIB)/ccpon.c 
-SRCALL += $(EXT_LIBS)/ulut/ulut/ul_gavlprim.c
-SRCALL += $(EXT_LIBS)/ulut/ulut/ul_gsacust.c
 SRCALL += $(wildcard $(COMMON_DIR)/shv/*.c)
 endif
+
+UNPACKLIB_DIR := $(PYSUPSICTRL)/CodeGen/LinuxRT/devices/unpacklib
 
 OBJ = $(notdir $(SRCALL:%.c=%.o))
 
@@ -44,8 +43,7 @@ DEFINES_LED = -D LED_SCRIPT=\"$(CWD)/led.py\"
 CC_FLAGS = -c $(DBG) $(INCLUDE)
 ifeq ($(SHV),1)
 CC_FLAGS += -I$(COMMON_DIR)/shv/include
-CC_FLAGS += -I$(EXT_LIBS)/libshv/libshvchainpack/c/include
-CC_FLAGS += -I$(EXT_LIBS)/ulut
+CC_FLAGS += -I$(SHV_COMPILED_INC_PATH)
 endif
 CC_FLAGS += -D CG_WITH_ENV_HOST_ADDR
 CC_FLAGS_SCP = -c $(DBG) $(INCLUDE)  $(DEFINES_SCP)
@@ -56,10 +54,27 @@ CC_FLAGS_FMU = -c $(DBG) $(INCLUDE) -Wall -DFMI_COSIMULATION \
 
 dependencies:
 ifeq ($(SHV),1)
-	cd $(EXT_LIBS) && if [ ! -e libshv ]; then git clone https://github.com/silicon-heaven/libshv; fi
-	cd $(EXT_LIBS) && if [ ! -e ulut ]; then git clone https://git.code.sf.net/p/ulan/ulut; fi
+	@ cd $(EXT_LIBS); \
+	if [ ! -e shv-libs4c-linux ]; then \
+		echo "Cloning shv-libs4c"; \
+		if ! git clone https://github.com/silicon-heaven/shv-libs4c shv-libs4c-linux > /dev/null 2>&1; then \
+			echo "Failed cloning the Silicon Heaven library, try again."; \
+		else \
+			( cd shv-libs4c-linux && \
+			  git checkout $(SHV_REVISION) && \
+			  git submodule update --recursive --init ) > /dev/null 2>&1; \
+			make -C shv-libs4c-linux CONFIG_SHV_LIBS4C_PLATFORM="linux" \
+				CC="$(CC)" \
+				CXX="$(CXX)" \
+				CFLAGS="$(CFLAGS)" \
+				CXXFLAGS="$(CXXFLAGS)" \
+				LD="$(LD)" \
+				LDFLAGS="$(LDFLAGS)" \
+				CONFIG_OC_ULUT_TESTS=n; \
+		fi \
+	fi
 endif
-	cd $(PYSUPSICTRL)/CodeGen/LinuxRT/devices
+	@cd $(PYSUPSICTRL)/CodeGen/LinuxRT/devices
 
 allfiles:
 
@@ -68,65 +83,76 @@ EXCLUDE = comedi_analog_input.c comedi_analog_output.c comedi_digital_input.c co
 SRC=$(filter-out $(EXCLUDE),$(SRCALL))
 
 scope.o: scope.c
-	$(CC) $(CC_FLAGS_SCP) $<
+	@echo "CC: $<"
+	@$(CC) $(CC_FLAGS_SCP) $<
 
 led.o: led.c
-	$(CC) $(CC_FLAGS_LED) $<
+	@echo "CC: $<"
+	@$(CC) $(CC_FLAGS_LED) $<
 
 FMUinterface.o: FMUinterface.c
-	$(CC) $(CC_FLAGS_FMU) $<
+	@echo "$CC: $<"
+	@$(CC) $(CC_FLAGS_FMU) $<
 
 %.o: %.c
-	$(CC) $(CC_FLAGS) $<
+	@echo "CC: $$(basename $<)"
+	@$(CC) $(CC_FLAGS) $<
 
 %.o: $(COMMON_DIR)/CAN_dev/%.c
-	$(CC) $(CC_FLAGS) $<
+	@echo "CC: CAN_dev/$$(basename $<)"
+	@$(CC) $(CC_FLAGS) $<
 
 %.o: $(COMMON_DIR)/common_dev/%.c
-	$(CC) $(CC_FLAGS) $<
+	@echo "CC: common_dev/$$(basename $<)"
+	@$(CC) $(CC_FLAGS) $<
 
 %.o: $(COMMON_DIR)/Faulhaber_dev/%.c
-	$(CC) $(CC_FLAGS) $<
+	@echo "CC: Faulhaber_dev/$$(basename $<)"
+	@$(CC) $(CC_FLAGS) $<
 
 %.o: $(COMMON_DIR)/Maxon_dev/%.c
-	$(CC) $(CC_FLAGS) $<
+	@echo "CC: Maxon_dev/$$(basename $<)"
+	@$(CC) $(CC_FLAGS) $<
 
 %.o: $(COMMON_DIR)/posix/%.c
-	$(CC) $(CC_FLAGS) $<
+	@echo "CC: posix/$$(basename $<)"
+	@$(CC) $(CC_FLAGS) $<
 
 %.o: $(COMMON_DIR)/AR2INO/%.c
-	$(CC) $(CC_FLAGS) $<
+	@echo "CC: AR2INO/$$(basename $<)"
+	@$(CC) $(CC_FLAGS) $<
 
 ifeq ($(SHV),1)
-cchainpack.o: $(EXT_SHV_LIB)/cchainpack.c
-	$(CC) $(CC_FLAGS) $<
-
-ccpcp.o: $(EXT_SHV_LIB)/ccpcp.c
-	$(CC) $(CC_FLAGS) $<
-
-ccpcp_convert.o: $(EXT_SHV_LIB)/ccpcp_convert.c
-	$(CC) $(CC_FLAGS) $<
-
-ccpon.o: $(EXT_SHV_LIB)/ccpon.c
-	$(CC) $(CC_FLAGS) $<
-
-ul_gavlprim.o: $(EXT_LIBS)/ulut/ulut/ul_gavlprim.c
-	$(CC) $(CC_FLAGS) $<
-
-ul_gsacust.o: $(EXT_LIBS)/ulut/ulut/ul_gsacust.c
-	$(CC) $(CC_FLAGS) $<
-
 %.o: $(COMMON_DIR)/shv/%.c
-	$(CC) $(CC_FLAGS) $<
+	@echo "CC: shv/$$(basename $<)"
+	@$(CC) $(CC_FLAGS) $<
 endif
 
 lib: $(OBJ)
-	$(AR) -r $(LIB) $(OBJ)
+ifeq ($(SHV),1)
+	@ echo "AR: *.o"; \
+	echo "AR: libshvchainpack.a libshvtree.a libulut.a"; \
+	mkdir -p $(UNPACKLIB_DIR); \
+	cp $^ $(UNPACKLIB_DIR); \
+	cd $(UNPACKLIB_DIR); \
+	ar x $(SHV_COMPILED_LIB_PATH)/libshvchainpack.a; \
+	ar x $(SHV_COMPILED_LIB_PATH)/libshvtree.a; \
+	ar x $(SHV_COMPILED_LIB_PATH)/libulut.a; \
+	$(AR) rcs $(LIB) *.o; \
+	cp $(LIB) ..; \
+	rm -r $(UNPACKLIB_DIR)
+else
+	@echo "AR: *.o"
+	@$(AR) rcs $(LIB) $(OBJ)
+endif
 
 install:
-	mv $(LIB) ../lib
+	@echo "MV: $(LIB) -> PYSUPSICTRL/CodeGen/LinuxRT/lib/$(LIB)"
+	@mv $(LIB) ../lib
 
 clean:
-	rm -rf $(EXT_LIBS)/libshv
-	rm -rf $(EXT_LIBS)/ulut
-	rm -f $(LIB) $(OBJ)
+	@echo "RM: shv-libs4c-linux"
+	@echo "RM: $(LIB)"
+	@echo "RM: *.o"
+	@rm -rf $(EXT_LIBS)/shv-libs4c-linux
+	@rm -f $(LIB) $(OBJ)

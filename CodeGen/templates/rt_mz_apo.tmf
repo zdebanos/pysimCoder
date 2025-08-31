@@ -1,4 +1,5 @@
 MODEL = $$MODEL$$
+ADDITIONAL_DEFINES = $$ADDITIONAL_DEFINES$$
 all: ../$(MODEL)
 
 PYCODEGEN = $(PYSUPSICTRL)/CodeGen
@@ -8,8 +9,7 @@ INCDIR  = $(PYCODEGEN)/linux_mz_apo/include
 COMMON_INCDIR = $(PYCODEGEN)/Common/include
 
 SHV_INC = $(PYCODEGEN)/Common/shv/include
-ULUT_INC = $(PYSUPSICTRL)/ExtLibs/ulut
-EXT_SHV_INC = $(PYSUPSICTRL)/ExtLibs/libshv/libshvchainpack/c/include
+EXT_SHV_INC = $(PYSUPSICTRL)/ExtLibs/shv-libs4c-linux-mzapo/_compiled/include
 
 RM = rm -f
 FILES_TO_CLEAN = *.o $(MODEL)
@@ -25,15 +25,17 @@ OBJSSTAN = $(MAIN).o $(MODEL).o $(ADD_FILES)
 CFLAGS = $(CC_OPTIONS) -O2 -I$(INCDIR) -I$(COMMON_INCDIR) $(C_FLAGS) -DMODEL=$(MODEL)
 
 CFLAGS += -I$(SHV_INC)
-ifneq ($(wildcard $(ULUT_INC)),)
-ULUT_INC = $(PYSUPSICTRL)/ExtLibs/ulut
-CFLAGS += -I$(ULUT_INC)
-endif
 ifneq ($(wildcard $(EXT_SHV_INC)),)
 CFLAGS += -I$(EXT_SHV_INC)
 endif
 
 LIB = $(LIBDIR)/libpyblk.a
+LIB += -lrt -pthread -lm
+
+# shv-libs4c has zlib as a dependancy
+ifneq ($(SHV_USED),)
+LIB += -lz
+endif
 
 $(MAIN).c: $(MAINDIR)/$(MAIN).c $(MODEL).c
 	cp $< .
@@ -42,7 +44,7 @@ $(MAIN).c: $(MAINDIR)/$(MAIN).c $(MODEL).c
 	$(CC) -c -o $@ $(CFLAGS) $<
 
 ../$(MODEL): $(OBJSSTAN) $(LIB)
-	$(CC) -o $@  $(OBJSSTAN) $(LIB) -lrt -lpthread -lm
+	$(CC) -o $@  $(OBJSSTAN) $(LIB)
 	@echo "### Created executable: $(MODEL)"
 
 clean:

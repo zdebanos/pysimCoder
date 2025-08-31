@@ -8,6 +8,9 @@ INCLUDE =  -I$(GENERIC_INC) -I$(TARGET_INC)
 
 COMMON_DIR = $(PYSUPSICTRL)/CodeGen/Common
 EXT_LIBS = $(PYSUPSICTRL)/ExtLibs
+SHV_COMPILED_INC_PATH = $(EXT_LIBS)/shv-libs4c-nuttx/_compiled/include
+SHV_COMPILED_LIB_PATH = $(EXT_LIBS)/shv-libs4c-nuttx/_compiled/lib
+SHV_REVISION = $(shell head -n1 "$(COMMON_DIR)/shv/shv-libs4c-revision.txt")
 
 NUTTX_EXPORT = $(PWD)/../nuttx-export
 
@@ -24,15 +27,13 @@ SRCALL = $(wildcard $(COMMON_DIR)/common_dev/*.c)
 SRCALL += $(wildcard $(COMMON_DIR)/posix/*.c)
 SRCALL += serialOut.c
 
+# Add the pysimCoder SHV adaptation sources
 ifeq ($(SHV),1)
-EXT_SHV_LIB = $(EXT_LIBS)/libshv/libshvchainpack/c
-
-SRCALL += $(EXT_SHV_LIB)/cchainpack.c $(EXT_SHV_LIB)/ccpcp.c \
-					$(EXT_SHV_LIB)/ccpcp_convert.c $(EXT_SHV_LIB)/ccpon.c 
-SRCALL += $(EXT_LIBS)/ulut/ulut/ul_gavlprim.c
-SRCALL += $(EXT_LIBS)/ulut/ulut/ul_gsacust.c
 SRCALL += $(wildcard $(COMMON_DIR)/shv/*.c)
 endif
+
+SHV_IN_NUTTX := $(shell grep -wc "CONFIG_NETUTILS_LIBSHVC" $(NUTTX_EXPORT)/include/nuttx/config.h)
+UNPACKLIB_DIR := $(PYSUPSICTRL)/CodeGen/nuttx/devices/unpacklib
 
 ifeq ($(CONFIG_ADC),y)
 SRCALL += nuttx_ADC.c
@@ -129,22 +130,47 @@ CXXFLAGS = $(TARGET_ARCH_FLAGS) $(ARCHCXXFLAGS) $(ARCHWARNINGSXX) $(OPT_OPTS) $(
 OBJEX = $(SRC:.c=.o)
 DEFINES = -D PLOTTER_SCRIPT=\"$(CWD)/scope.py\"
 CC_FLAGS = -c $(DBG) $(INCLUDE) $(CFLAGS)
+# Include the SHV include directories. Expect the headers at this exact location.
 ifeq ($(SHV),1)
+ifeq ($(SHV_IN_NUTTX),0)
+CC_FLAGS += -I$(SHV_COMPILED_INC_PATH)
+endif
 CC_FLAGS += -I$(COMMON_DIR)/shv/include
-CC_FLAGS += -I$(EXT_LIBS)/libshv/libshvchainpack/c/include
-CC_FLAGS += -I$(EXT_LIBS)/ulut
 endif
 CC_FLAGS_SCP = -c $(DBG) $(INCLUDE) $(CFLAGS) $(DEFINES)
 CC_FLAGS_FMU = -c $(DBG) $(INCLUDE) $(CFLAGS) -Wall -DFMI_COSIMULATION \
                              -DSTANDALONE_XML_PARSER -DLIBXML_STATIC \
                               -I$(FMUDIR)/fmuinc/include -I$(FMUDIR)/fmuinc/parser -I$(FMUDIR)/fmuinc
 
+# Decide what SHV version we pick. In case the NuttX export has no SHV support,
+# we clone the SHV as an external library and pack it inside $(LIB).
 dependencies:
 ifeq ($(SHV),1)
-	cd $(EXT_LIBS) && if [ ! -e libshv ]; then git clone https://github.com/silicon-heaven/libshv; fi
-	cd $(EXT_LIBS) && if [ ! -e ulut ]; then git clone https://git.code.sf.net/p/ulan/ulut; fi
+	@if [ "$(SHV_IN_NUTTX)" -lt 1 ]; then \
+		echo "Silicon Heaven library was not found in NuttX, using a cloned one."; \
+		cd $(EXT_LIBS); \
+		if [ ! -e shv-libs4c-nuttx ]; then \
+			if ! git clone https://github.com/silicon-heaven/shv-libs4c shv-libs4c-nuttx > /dev/null 2>&1; then \
+				echo "Failed cloning the Silicon Heaven library, try again."; \
+			else \
+				( cd shv-libs4c-nuttx && \
+				  git checkout $(SHV_REVISION) && \
+				  git submodule update --recursive --init ) > /dev/null 2>&1; \
+				make -C shv-libs4c-nuttx CONFIG_SHV_LIBS4C_PLATFORM="nuttx" \
+					CC="$(CC)" \
+					CXX="$(CXX)" \
+					CFLAGS="$(CFLAGS)" \
+					CXXFLAGS="$(CXXFLAGS)" \
+					LD="$(LD)" \
+					LDFLAGS="$(LDFLAGS)" \
+					CONFIG_OC_ULUT_TESTS=n; \
+			fi \
+		fi \
+	else \
+		echo "Using the Silicon Heaven library from the NuttX build."; \
+	fi
 endif
-	cd $(PYSUPSICTRL)/CodeGen/nuttx/devices
+	@cd $(PYSUPSICTRL)/CodeGen/nuttx/devices
 
 allfiles:
 
@@ -159,60 +185,70 @@ FMUinterface.o: FMUinterface.c
 	$(CC) $(CC_FLAGS_FMU) $<
 
 %.o: %.c
-	$(CC) $(CC_FLAGS) $<
+	@echo "CC: $$(basename $<)"
+	@$(CC) $(CC_FLAGS) $<
 
 %.o: sensors/%.c
-	$(CC) $(CC_FLAGS) $<
+	@echo "CC: sensors/$$(basename $<)"
+	@$(CC) $(CC_FLAGS) $<
 
 ifeq ($(SHV),1)
-cchainpack.o: $(EXT_SHV_LIB)/cchainpack.c
-	$(CC) $(CC_FLAGS) $<
-
-ccpcp.o: $(EXT_SHV_LIB)/ccpcp.c
-	$(CC) $(CC_FLAGS) $<
-
-ccpcp_convert.o: $(EXT_SHV_LIB)/ccpcp_convert.c
-	$(CC) $(CC_FLAGS) $<
-
-ccpon.o: $(EXT_SHV_LIB)/ccpon.c
-	$(CC) $(CC_FLAGS) $<
-
-ul_gavlprim.o: $(EXT_LIBS)/ulut/ulut/ul_gavlprim.c
-	$(CC) $(CC_FLAGS) $<
-
-ul_gsacust.o: $(EXT_LIBS)/ulut/ulut/ul_gsacust.c
-	$(CC) $(CC_FLAGS) $<
-
 %.o: $(COMMON_DIR)/shv/%.c
-	$(CC) $(CC_FLAGS) $<
+	@echo "CC: shv/$$(basename $<)"
+	@$(CC) $(CC_FLAGS) $<
 endif
 
-%.o: $(COMMON_DIR)/shv/%.c
-	$(CC) $(CC_FLAGS) $<
-
 %.o: $(COMMON_DIR)/CAN_dev/%.c
-	$(CC) $(CC_FLAGS) $<
+	@echo "CC: CAN_dev/$$(basename $<)"
+	@$(CC) $(CC_FLAGS) $<
 
 %.o: $(COMMON_DIR)/common_dev/%.c
-	$(CC) $(CC_FLAGS) $<
+	@echo "CC: common_dev/$$(basename $<)"
+	@$(CC) $(CC_FLAGS) $<
 
 %.o: $(COMMON_DIR)/Faulhaber_dev/%.c
-	$(CC) $(CC_FLAGS) $<
+	@echo "CC: Faulhaber_dev/$$(basename $<)"
+	@$(CC) $(CC_FLAGS) $<
 
 %.o: $(COMMON_DIR)/Maxon_dev/%.c
-	$(CC) $(CC_FLAGS) $<
+	@echo "CC: Maxon_dev/$$(basename $<)"
+	@$(CC) $(CC_FLAGS) $<
 
 %.o: $(COMMON_DIR)/posix/%.c
-	$(CC) $(CC_FLAGS) $<
+	@echo "CC: posix/$$(basename $<)"
+	@$(CC) $(CC_FLAGS) $<
 
 lib: $(OBJ)
-	$(AR) $(LIB) $(OBJ)
+ifeq ($(SHV),1)
+	@ if [ "$(SHV_IN_NUTTX)" -lt 1 ]; then \
+		echo "AR: *.o"; \
+		echo "AR: libshvchainpack.a libshvtree.a libulut.a"; \
+		mkdir -p $(UNPACKLIB_DIR); \
+		cp $^ $(UNPACKLIB_DIR); \
+		cd $(UNPACKLIB_DIR); \
+		ar x $(SHV_COMPILED_LIB_PATH)/libshvchainpack.a; \
+		ar x $(SHV_COMPILED_LIB_PATH)/libshvtree.a; \
+		ar x $(SHV_COMPILED_LIB_PATH)/libulut.a; \
+		$(AR) $(LIB) *.o; \
+		cp $(LIB) ..; \
+		rm -r $(UNPACKLIB_DIR); \
+	else \
+		echo "AR: *.o"; \
+		$(AR) $(LIB) $(OBJ); \
+	fi
+else
+	@echo "AR: *.o"
+	@$(AR) $(LIB) $(OBJ)
+endif
 
 install:
-	mkdir -p ../lib
-	mv $(LIB) ../lib
+	@mkdir -p ../lib
+	@echo "MV: $(LIB) -> PYSUPSICTRL/CodeGen/nuttx/lib/$(LIB)"
+	@mv $(LIB) $(PYSUPSICTRL)/CodeGen/nuttx/lib
 
 clean:
-	rm -rf $(EXT_LIBS)/libshv
-	rm -rf $(EXT_LIBS)/ulut
-	rm -f $(LIB) $(OBJ)
+	@echo "RM: shv-libs4c-nuttx"
+	@echo "RM: $(LIB)"
+	@echo "RM: *.o"
+	@rm -rf $(EXT_LIBS)/shv-libs4c-nuttx
+	@rm -f $(LIB) $(OBJ)
