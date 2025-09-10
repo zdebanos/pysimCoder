@@ -6,8 +6,6 @@ from supsisim.image_update import ImageUpdateMethod, OpenocdUpdateMethod, SHVUpd
 from supsisim.image_confirm import ImageConfirmMethod, SHVConfirmMethod
 from supsisim.shv.client import ShvFwUpdateClient
 from supsisim.shv.SHVInstance import SHVInstance
-from PyQt6.QtCore import QThread, pyqtSignal, pyqtSlot
-from PyQt6.QtGui import QFont
 from threading import Event
 from typing import Any, Callable, Optional
 from os import listdir
