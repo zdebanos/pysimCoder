@@ -1,6 +1,8 @@
 #!/usr/bin/python3
 
 import os
+import subprocess
+import sys
 
 from supsisim.qtvers import *
 
@@ -10,7 +12,7 @@ from supsisim.connection import Connection
 from supsisim.editor import Editor
 from supsisim.scene import Scene, GraphicsView
 from supsisim.dialg import IO_Dialog
-from supsisim.const import respath, pycmd, DP
+from supsisim.const import respath, DP, IS_WINDOWS, pyrun
 
 import json
 
@@ -465,7 +467,22 @@ class NewEditorMainWindow(QMainWindow):
         return ok
 
     def startpythonAct(self):
-        os.system(pycmd)
+        cmd = [pyrun, "-m", "qtconsole"]
+        try:
+            # We need to launch python3 -m qtconsole.
+            # It also depends on the system platform, where it is launched
+            kwargs = dict(
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+            if IS_WINDOWS:
+                kwargs["creationflags"] = (subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP)
+            else:
+                kwargs["start_new_session"] = True
+            subprocess.Popen(cmd, **kwargs)
+        except OSError as e:
+            print(f'Cannot start {" ".join(map(str, pycmd))}: {str(e)}')
 
     def showLibAct(self):
         if self.library.isMinimized():

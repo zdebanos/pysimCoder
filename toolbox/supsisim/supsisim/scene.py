@@ -576,9 +576,8 @@ class Scene(QGraphicsScene):
             except:
                 pass
             if flag:
-                cmd = pyrun + ' tmp.py'
                 try:
-                    subprocess.run(cmd, shell=True, check=True)
+                    subprocess.run([pyrun, 'tmp.py'], check=True)
                 except subprocess.CalledProcessError:
                     self.mainw.statusLabel.setText("Failed to compile generated code!")
                     del(dgmBlocks)
@@ -790,15 +789,14 @@ class Scene(QGraphicsScene):
             cmd += 'os.system("' + 'rm -r ' + fnm + ' ' + fnm + '_gen' + '" )'
 
             try:
-                os.mkdir(TEMP + '/' + self.mainw.filename + '_gen')
+                os.mkdir(os.path.join(TEMP, self.mainw.filename + '_gen'))
             except:
                 pass
             f = open('tmp.py','a')
             f.write(cmd)
             f.close()
-            cmd = pyrun + ' tmp.py'
             try:
-                os.system(cmd)
+                subprocess.run([pyrun, 'tmp.py'])
                 self.mainw.statusLabel.setText('Simulation finished')
             except:
                 pass

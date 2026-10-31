@@ -2,7 +2,7 @@ from supsisim.qtvers import *
 
 from supsisim.port import Port, InPort, OutPort
 from supsisim.connection import Connection
-from supsisim.const import GRID, PW, LW, BWmin, BHmin, BHstep, PD, respath
+from supsisim.const import GRID, PW, LW, BWmin, BHmin, BHstep, PD, respath, TMPDIR
 
 import os
 
@@ -228,7 +228,7 @@ class Block(QGraphicsPathItem):
         if self.flip:
             self.setTransform(QTransform.fromScale(-1, 1))
             # the path
-            mirr_path = '/tmp/' + self.icon + '.svg'
+            mirr_path = os.path.join(TMPDIR, self.icon + '.svg')
             if not os.path.exists(mirr_path):
                 cmd = 'inkscape --actions="select-all;object-flip-horizontal" -o ' + mirr_path + ' ' + str_path
                 os.system(cmd)
