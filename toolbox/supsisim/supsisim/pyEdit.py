@@ -482,7 +482,7 @@ class NewEditorMainWindow(QMainWindow):
                 kwargs["start_new_session"] = True
             subprocess.Popen(cmd, **kwargs)
         except OSError as e:
-            print(f'Cannot start {" ".join(map(str, pycmd))}: {str(e)}')
+            print(f'Cannot start {" ".join(map(str, cmd))}: {str(e)}')
 
     def showLibAct(self):
         if self.library.isMinimized():
