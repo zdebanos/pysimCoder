@@ -5,7 +5,7 @@ from supsisim.subsblock import subsBlock
 from supsisim.port import Port, InPort, OutPort
 from supsisim.connection import Connection
 from supsisim.dialg import RTgenDlg, SHVDlg, UpdimgDlg
-from supsisim.const import VERSION, pyrun, TEMP, respath, BWmin
+from supsisim.const import VERSION, pyrun, respath, BWmin, EXE_SUFFIX, MAKE
 from supsisim.getTemplates import dictTemplates
 from supsisim.RCPblk import RcpParam
 from .shv import ShvClient, SHVInstance
@@ -298,13 +298,13 @@ class Scene(QGraphicsScene):
     def saveDgm(self, fname):
         fileDict = {}
         self.DgmToDict(fileDict)
-        f = open(fname,'w')
+        f = open(fname, 'w', encoding='utf-8')
         js = json.dumps(fileDict)
         f.write(js)
         f.close()
 
     def loadDgm(self, fname):
-        f = open(fname,'r')
+        f = open(fname, 'r', encoding='utf-8')
         msg = f.read()
         f.close()
 
@@ -397,7 +397,7 @@ class Scene(QGraphicsScene):
         if self.template == "nuttx_timerhook.tmf" or \
            self.template == "nuttx_systemtickhook.tmf" or \
            self.template == "nuttx.tmf":
-            upd_filename = "./" + self.mainw.filename + ".nximg"
+            upd_filename = os.path.join('.', self.mainw.filename + ".nximg")
         else:
             upd_filename = self.mainw.filename
 
@@ -571,10 +571,7 @@ class Scene(QGraphicsScene):
             self.generateCCode(dgmBlocks)
 
             self.mainw.statusLabel.setText('Code generation OK!')
-            try:
-                os.mkdir('./' + self.mainw.filename + '_gen')
-            except:
-                pass
+            os.makedirs(os.path.join('.', self.mainw.filename + '_gen'), exist_ok=True)
             if flag:
                 try:
                     subprocess.run([pyrun, 'tmp.py'], check=True)
@@ -693,20 +690,22 @@ class Scene(QGraphicsScene):
 
     def generateCCode(self, items):
         try:
-            f = open(self.script,'r')
+            f = open(self.script, 'r', encoding='utf-8')
             txt = f.read()
             f.close()
             txt += '\n'
         except:
             txt = ''
 
-        dir1 = respath + 'blocks/rcpBlk'
+        # Paths are emitted with repr() so they form valid Python literals
+        # on every host (e.g. Windows backslashes are escaped)
+        dir1 = os.path.join(respath, 'blocks', 'rcpBlk')
         txt += 'import os\n\n'
 
         txt += 'from supsisim.RCPblk import RCPblk, RcpParam\n\n'
-        txt += 'dirs = os.listdir("' + dir1 + '")\n'
+        txt += 'dirs = os.listdir(' + repr(dir1) + ')\n'
         txt += 'for el in dirs:\n'
-        txt += '    files = os.listdir("' + dir1 + '" + "/" + el)\n'
+        txt += '    files = os.listdir(os.path.join(' + repr(dir1) + ', el))\n'
         txt += '    for f in files:\n'
         txt += '        if not f.endswith(".py"):\n'
         txt += '            continue\n'
@@ -732,7 +731,7 @@ class Scene(QGraphicsScene):
                 txt += blk_text + '\n\n'
 
         fname = self.mainw.filename
-        with open('tmp.py', 'w') as fn:
+        with open('tmp.py', 'w', encoding='utf-8') as fn:
             fn.write(txt + '\n')
 
             for item in blkList:
@@ -762,17 +761,18 @@ class Scene(QGraphicsScene):
             txt +=  'os.environ["SHV_UPDATES_USED"] = \"' + str(self.SHV.updates) + '\"\n'
             fn.write(txt)
 
-            fnm = './' + fname + '_gen'
+            fnm = os.path.join('.', fname + '_gen')
 
             fn.write('fname = ' + "'" + fname + "'\n")
-            fn.write('os.chdir("'+ fnm +'")\n')
+            fn.write('os.chdir(' + repr(fnm) + ')\n')
             fn.write('genCode(fname, ' + self.Ts + ', blks, ' + "'" + self.intgMethod + "', " + \
                     self.epsAbs + ', ' + self.epsRel +')\n')
             fn.write("genMake(fname, '" + self.template + "', addObj = '" +
                   self.addObjs + "', addCDefs = '" + self.parsedAddCDefs + "', addMakeArgs= '" + self.parsedAddMakeArgs + "')\n")
             fn.write('\nimport os\n')
-            fn.write('os.system("make clean")\n')
-            fn.write('if (os.system("make")) != 0:\n')
+            fn.write('import subprocess\n')
+            fn.write('subprocess.run([' + repr(MAKE) + ', "clean"])\n')
+            fn.write('if subprocess.run([' + repr(MAKE) + ']).returncode != 0:\n')
             fn.write('  raise RuntimeError("C code compilation failed")\n')
             fn.write('os.chdir("..")\n')
 
@@ -781,18 +781,23 @@ class Scene(QGraphicsScene):
             cmd  = '\n'
             cmd += 'import matplotlib.pyplot as plt\n'
             cmd += 'import numpy as np\n\n'
+            fnm = self.mainw.filename
+            exe = os.path.join('.', fnm + EXE_SUFFIX)
+            args = [exe]
             prio = self.prio.replace(' ','')
             if prio != '':
-                prio = ' -p ' + prio
-            cmd += 'os.system("./' + self.mainw.filename + prio + ' -f ' + self.Tf + '")\n'
-            fnm = self.mainw.filename
-            cmd += 'os.system("' + 'rm -r ' + fnm + ' ' + fnm + '_gen' + '" )'
+                args += ['-p', prio]
+            args += ['-f', self.Tf.strip()]
+            cmd += 'import shutil\n'
+            cmd += 'import subprocess\n'
+            cmd += 'subprocess.run(' + repr(args) + ')\n'
+            # Remove the simulation executable and the generated sources
+            cmd += 'if os.path.exists(' + repr(exe) + '):\n'
+            cmd += '    os.remove(' + repr(exe) + ')\n'
+            cmd += 'shutil.rmtree(' + repr(os.path.join('.', fnm + '_gen')) + ', ignore_errors=True)\n'
 
-            try:
-                os.mkdir(os.path.join(TEMP, self.mainw.filename + '_gen'))
-            except:
-                pass
-            f = open('tmp.py','a')
+            os.makedirs(os.path.join('.', fnm + '_gen'), exist_ok=True)
+            f = open('tmp.py', 'a', encoding='utf-8')
             f.write(cmd)
             f.close()
             try:

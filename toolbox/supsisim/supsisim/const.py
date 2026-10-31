@@ -30,7 +30,7 @@ SEP = os.sep                    # path component separator
 PATHSEP = os.pathsep            # separator of PATH-like lists
 EXE_SUFFIX = '.exe' if IS_WINDOWS else ''
 SHLIB_SUFFIX = '.dll' if IS_WINDOWS else '.dylib' if IS_MACOS else '.so'
-TEMP = os.curdir
+MAKE = os.environ.get('MAKE', 'make')  # make tool, overridable via $MAKE
 TMPDIR = tempfile.gettempdir()
 
 # Install paths (PYSUPSICTRL is set by pysim-run.sh), with trailing separator
