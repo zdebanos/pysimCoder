@@ -2,7 +2,6 @@
 
 import os
 import subprocess
-import sys
 
 from supsisim.qtvers import *
 
@@ -68,7 +67,7 @@ class NewEditorMainWindow(QMainWindow):
         self.modified = False
 
     def addactions(self):
-        mypath = respath + '/icons/'
+        mypath = os.path.join(respath, 'icons', '')
 
         self.newFileAction = QAction(QIcon(mypath+'filenew.png'),
                                      '&New', self,
@@ -330,7 +329,7 @@ class NewEditorMainWindow(QMainWindow):
         self.scene.updateDgm()
         
     def getFullFileName(self):
-        return(self.filePath + '/' + self.filename + '.dgm')
+        return os.path.join(self.filePath, self.filename + '.dgm')
 
     def askSaving(self):
         items = self.scene.items()
@@ -378,7 +377,7 @@ class NewEditorMainWindow(QMainWindow):
                 self.modified = False
 
     def saveFileAs(self):
-        filename = QFileDialog.getSaveFileName(self, 'Save', self.workingFolder+'/'+self.filename, filter='*.dgm')
+        filename = QFileDialog.getSaveFileName(self, 'Save', os.path.join(self.workingFolder, self.filename), filter='*.dgm')
         filename = filename[0]
         if filename != '':
             fname = QFileInfo(filename)
@@ -412,7 +411,7 @@ class NewEditorMainWindow(QMainWindow):
         text += '\n\n built on PyQt '
         text += QT_VERSION_STR
         msg.setText(text)
-        pix = QPixmap(respath+'/icons/application-x-pysimcoder.svg')
+        pix = QPixmap(os.path.join(respath, 'icons', 'application-x-pysimcoder.svg'))
         pix = pix.scaledToHeight(128)
         msg.setIconPixmap(pix)
         msg.setStandardButtons(QMessageBox.StandardButton.Close)
