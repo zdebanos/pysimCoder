@@ -16,6 +16,10 @@ DB = 4
 
 VERSION = 0.95
 
+# Version of the .dgm file format, independent of VERSION.
+# Should be bumped everytime a crucial change is made.
+DGM_FORMAT_VERSION = 1
+
 path = os.environ.get('PYSUPSICTRL') + '/'
 respath = path+'resources/'
 pycmd = 'jupyter qtconsole &'

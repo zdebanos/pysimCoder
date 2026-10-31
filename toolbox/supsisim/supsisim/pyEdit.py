@@ -9,7 +9,7 @@ from supsisim.subsblock import subsBlock
 from supsisim.connection import Connection
 from supsisim.editor import Editor
 from supsisim.scene import Scene, GraphicsView
-from supsisim.dialg import IO_Dialog
+from supsisim.dialg import IO_Dialog, checkDgmBeforeOpen, DgmOpenAction
 from supsisim.const import respath, pycmd, DP
 
 import json
@@ -353,6 +353,8 @@ class NewEditorMainWindow(QMainWindow):
             self.fopen(filename)
 
     def fopen(self, filename, scene = None):
+        if scene == None and checkDgmBeforeOpen(self, filename) != DgmOpenAction.OPEN:
+            return
         fname = QFileInfo(filename)
         filePath = str(fname.absolutePath())
         fn = str(fname.baseName())
